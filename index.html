@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ШІ для переписки</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel input-panel">
+        <div class="title-row">
+          <div>
+            <p class="eyebrow">Помічник для знайомств</p>
+            <h1>Що їй написати?</h1>
+          </div>
+          <span id="modeBadge" class="badge">готовий</span>
+        </div>
+
+        <label>
+          Ситуація
+          <select id="situation">
+            <option>Продовжити переписку</option>
+            <option>Переписка зайшла в глухий кут</option>
+            <option>Вона давно не відповідає</option>
+            <option>Запросити на зустріч</option>
+            <option>Відповісти на її повідомлення</option>
+            <option>Почати спілкування після знайомства</option>
+          </select>
+        </label>
+
+        <div class="grid">
+          <label>
+            Тон
+            <select id="tone">
+              <option>спокійний, впевнений, живий</option>
+              <option>м'який і ненав'язливий</option>
+              <option>легкий флірт</option>
+              <option>з гумором</option>
+              <option>коротко і прямо</option>
+            </select>
+          </label>
+
+          <label>
+            Мова
+            <select id="language">
+              <option>Українська</option>
+              <option>Російська</option>
+              <option>English</option>
+            </select>
+          </label>
+        </div>
+
+        <label>
+          Твоя ціль
+          <input id="goal" value="підтримати нормальне спілкування" />
+        </label>
+
+        <label>
+          Як ти зазвичай пишеш
+          <input id="style" placeholder="Наприклад: коротко, без пафосу, можна трохи жартувати" />
+        </label>
+
+        <label>
+          Встав переписку або коротко опиши ситуацію
+          <textarea id="context" placeholder="Приклад: Я написав..., вона відповіла..., потім тиша 2 дні. Хочу написати без нав'язливості."></textarea>
+        </label>
+
+        <button id="generateBtn">Підібрати відповідь</button>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="output-header">
+          <h2>Варіанти</h2>
+          <button id="copyBtn" class="secondary">Копіювати</button>
+        </div>
+        <pre id="result">Встав переписку зліва і натисни кнопку. Я дам готове повідомлення, кілька альтернатив і скажу, чого краще уникати.</pre>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

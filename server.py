@@ -1,0 +1,311 @@
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+import json
+import os
+import urllib.error
+import urllib.request
+
+
+PORT = int(os.getenv("PORT", "8000"))
+OPENAI_URL = "https://api.openai.com/v1/responses"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+
+def load_env_file():
+    env_path = os.path.join(os.getcwd(), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as file:
+        for raw_line in file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def build_prompt(data):
+    language = data.get("language", "Українська")
+    situation = data.get("situation", "Продовжити переписку")
+    tone = data.get("tone", "спокійний, впевнений, живий")
+    goal = data.get("goal", "підтримати нормальне спілкування")
+    context = data.get("context", "").strip()
+    user_style = data.get("style", "").strip()
+
+    return f"""
+Ти персональний помічник для переписки у знайомствах.
+Завдання: допомогти чоловіку написати природну, поважну, не нав'язливу відповідь.
+
+Правила:
+- Не маніпулюй, не тисни, не вигадуй факти про користувача.
+- Не радь писати багато повідомлень підряд, якщо це виглядає нав'язливо.
+- Якщо краще не писати зараз, скажи це прямо і дай м'яку альтернативу.
+- Пиши живо, без канцеляриту і без шаблонного пікапу.
+- Відповіді мають звучати як реальна людина, а не як робот.
+- Якщо в переписці є явний холод або відмова, поважай це.
+
+Мова відповіді: {language}
+Ситуація: {situation}
+Бажаний тон: {tone}
+Ціль: {goal}
+Стиль користувача: {user_style or "простий, природний, без пафосу"}
+
+Переписка або опис ситуації:
+{context}
+
+Поверни відповідь у такому форматі:
+1. Найкращий варіант повідомлення.
+2. Ще 3 варіанти: м'якше, сміливіше, з гумором.
+3. Коротко поясни, чому це працює.
+4. Попередження: що не варто писати в цій ситуації.
+""".strip()
+
+
+def fallback_reply(data):
+    situation = data.get("situation", "")
+    language = data.get("language", "Українська")
+    is_ua = "english" not in language.lower()
+
+    if is_ua:
+        opener = "Мені здається, тут краще написати легко і без тиску."
+        if "глухий" in situation.lower() or "мовч" in situation.lower():
+            best = "Слухай, я щось згадав нашу розмову і подумав: а який у тебе зараз найприємніший план на тиждень?"
+        elif "запрос" in situation.lower() or "зустр" in situation.lower():
+            best = "Мені з тобою цікаво спілкуватись. Може, вип'ємо кави цього тижня і продовжимо вже наживо?"
+        else:
+            best = "Ахах, звучить цікаво. А як ти взагалі до цього прийшла?"
+        return f"""{opener}
+
+1. Найкращий варіант:
+{best}
+
+2. Ще варіанти:
+М'якше: "До речі, як у тебе день проходить?"
+Сміливіше: "Ти цікава. Хочу краще тебе зрозуміти, розкажеш трохи більше?"
+З гумором: "Окей, тепер мені потрібна повна версія цієї історії, бо тизер вийшов сильний."
+
+3. Чому це працює:
+Повідомлення коротке, не просить уваги силою і дає їй легку тему для відповіді.
+
+4. Що не варто писати:
+Не пиши докори типу "чого мовчиш", не засипай повідомленнями і не роби вигляд, що тобі байдуже, якщо це не так.
+
+Примітка: це локальна підказка. Якщо API-ключ уже додано, але ти бачиш цей режим, безкоштовний API тимчасово недоступний або вперся в ліміт."""
+
+    return """1. Best message:
+Hey, this made me curious. How did you even get into that?
+
+2. Other options:
+Softer: "By the way, how is your day going?"
+Bolder: "You're interesting. I want to understand you better."
+Funny: "Okay, now I need the full story, because the teaser is too good."
+
+3. Why it works:
+It is short, calm, and gives her an easy way to continue.
+
+4. Avoid:
+Do not guilt-trip her for silence or send several messages in a row.
+
+Note: this is a local fallback. If an API key is already configured, the free API is temporarily unavailable or rate-limited."""
+
+
+def call_openai(data):
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    prompt = build_prompt(data)
+    payload = {
+        "model": model,
+        "input": prompt,
+        "temperature": 0.8,
+        "max_output_tokens": 1200,
+    }
+    result = post_json(
+        OPENAI_URL,
+        payload,
+        {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    text = result.get("output_text", "").strip()
+    if not text:
+        chunks = []
+        for item in result.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in ("output_text", "text"):
+                    chunks.append(content.get("text", ""))
+        text = "\n".join(chunks).strip()
+
+    return {"text": text or "Не вдалося прочитати відповідь моделі.", "mode": "OpenAI"}
+
+
+def call_openrouter(data):
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": build_prompt(data)}],
+        "temperature": 0.8,
+        "max_tokens": 1200,
+    }
+    result = post_json(
+        OPENROUTER_URL,
+        payload,
+        {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "http://127.0.0.1:8000",
+            "X-Title": "Dating Assistant",
+        },
+    )
+    text = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+    return {"text": text or "Не вдалося прочитати відповідь OpenRouter.", "mode": "OpenRouter"}
+
+
+def call_gemini(data, model=None):
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+    generation_config = {
+        "temperature": 0.8,
+        "maxOutputTokens": 2048,
+    }
+    if model.startswith("gemini-2.5") or model.startswith("gemini-3"):
+        generation_config["thinkingConfig"] = {"thinkingBudget": 0}
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": build_prompt(data),
+                    }
+                ]
+            }
+        ],
+        "generationConfig": generation_config,
+    }
+    url = GEMINI_URL_TEMPLATE.format(model=model, api_key=api_key)
+    result = post_json(url, payload, {"Content-Type": "application/json"})
+    chunks = []
+    for candidate in result.get("candidates", []):
+        for part in candidate.get("content", {}).get("parts", []):
+            chunks.append(part.get("text", ""))
+    text = "\n".join(chunks).strip()
+    return {"text": text or "Не вдалося прочитати відповідь Gemini.", "mode": f"Gemini: {model}"}
+
+
+def post_json(url, payload, headers):
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"API error {error.code}: {details}") from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Network error: {error.reason}") from error
+
+
+def suggest(data):
+    if os.getenv("GEMINI_API_KEY", "").strip():
+        models = [
+            os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite").strip(),
+            "gemini-2.0-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-flash-lite-latest",
+            "gemini-2.5-flash-lite",
+        ]
+        seen = set()
+        errors = []
+        for model in models:
+            if not model or model in seen:
+                continue
+            seen.add(model)
+            try:
+                return call_gemini(data, model)
+            except Exception as error:
+                errors.append(f"{model}: {error}")
+                continue
+        error_text = summarize_api_errors(errors)
+        return {
+            "text": f"Gemini зараз не відповів нормально на безкоштовних моделях, тому даю локальну підказку.\n\n{error_text}\n\n{fallback_reply(data)}",
+            "mode": "Gemini недоступний",
+        }
+    if os.getenv("OPENROUTER_API_KEY", "").strip():
+        try:
+            return call_openrouter(data)
+        except Exception as error:
+            return {
+                "text": f"OpenRouter зараз не відповів нормально, тому даю локальну підказку.\n\n{short_error(error)}\n\n{fallback_reply(data)}",
+                "mode": "OpenRouter недоступний",
+            }
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        try:
+            return call_openai(data)
+        except Exception as error:
+            return {
+                "text": f"OpenAI зараз не відповів нормально, тому даю локальну підказку.\n\n{short_error(error)}\n\n{fallback_reply(data)}",
+                "mode": "OpenAI недоступний",
+            }
+    return {"text": fallback_reply(data), "mode": "Локальний режим"}
+
+
+def short_error(error):
+    message = str(error)
+    if "429" in message or "RESOURCE_EXHAUSTED" in message or "quota" in message.lower():
+        return "Причина: безкоштовний ліміт API зараз вичерпано або недоступний."
+    if "503" in message or "UNAVAILABLE" in message or "high demand" in message.lower():
+        return "Причина: модель тимчасово перевантажена."
+    if "timed out" in message.lower() or "timeout" in message.lower():
+        return "Причина: API відповідав занадто довго."
+    return "Причина: тимчасова помилка API."
+
+
+def summarize_api_errors(errors):
+    joined = "\n".join(errors)
+    parts = []
+    if "429" in joined or "RESOURCE_EXHAUSTED" in joined or "quota" in joined.lower():
+        parts.append("Частина моделей зараз має нульовий або вичерпаний free-tier ліміт.")
+    if "503" in joined or "UNAVAILABLE" in joined or "high demand" in joined.lower():
+        parts.append("Частина моделей тимчасово перевантажена.")
+    if not parts:
+        parts.append("Є тимчасова помилка API.")
+    return " ".join(parts)
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def do_POST(self):
+        if self.path != "/api/suggest":
+            self.send_error(404)
+            return
+
+        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+            result = suggest(data)
+            self.send_json(200, result)
+        except Exception as error:
+            self.send_json(500, {"error": str(error)})
+
+    def send_json(self, status, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+if __name__ == "__main__":
+    load_env_file()
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    print(f"Dating assistant is running: http://127.0.0.1:{PORT}")
+    server.serve_forever()
