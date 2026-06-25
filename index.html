@@ -10,22 +10,22 @@
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">AI</div>
+          <div class="brand-mark"><span>✦</span></div>
           <div>
             <strong>Girl AI</strong>
-            <span>чат-помічник</span>
+            <span>помічник для переписки</span>
           </div>
         </div>
 
         <nav class="nav">
-          <button class="nav-btn active" data-view="chat">Чат</button>
-          <button class="nav-btn" data-view="situations">Ситуації</button>
-          <button class="nav-btn" data-view="people">Профілі</button>
-          <button class="nav-btn" data-view="favorites">Обране</button>
-          <button class="nav-btn" data-view="settings">Стиль</button>
-          <button class="nav-btn" data-view="profile">Кабінет</button>
-          <button class="nav-btn" data-view="billing">Тариф</button>
-          <button class="nav-btn" data-view="admin" data-admin-only="true">Історія</button>
+          <button class="nav-btn active" data-view="chat"><span>💬</span> Чат</button>
+          <button class="nav-btn" data-view="situations"><span>⚡</span> Ситуації</button>
+          <button class="nav-btn" data-view="people"><span>👤</span> Профілі</button>
+          <button class="nav-btn" data-view="favorites"><span>❤️</span> Обране</button>
+          <button class="nav-btn" data-view="settings"><span>🎨</span> Стиль</button>
+          <button class="nav-btn" data-view="profile"><span>⚙</span> Кабінет</button>
+          <button class="nav-btn" data-view="billing"><span>💎</span> Тариф</button>
+          <button class="nav-btn" data-view="admin" data-admin-only="true"><span>🕒</span> Історія</button>
         </nav>
 
         <div class="sidebar-note">
@@ -37,7 +37,7 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">AI-тренер переписки</p>
+            <p class="eyebrow">Приватний помічник переписки</p>
             <h1>Що їй написати?</h1>
           </div>
           <div class="top-actions">
@@ -48,13 +48,44 @@
           </div>
         </header>
 
-        <section id="view-chat" class="view active">
+        <section id="view-landing" class="view active">
+          <div class="landing">
+            <div class="landing-copy">
+              <p class="eyebrow">Girl AI</p>
+              <h2>Пиши спокійно, влучно і без крінжу</h2>
+              <p>Встав повідомлення або опиши ситуацію, а сервіс підбере відповідь, розбере тон і підкаже, коли краще написати.</p>
+              <div class="landing-actions">
+                <button class="start-chat-btn" type="button">Почати</button>
+                <button class="secondary" data-view-button="settings" type="button">Налаштувати стиль</button>
+              </div>
+              <div class="landing-stats">
+                <div><strong>⭐⭐⭐⭐⭐</strong><span>формат особистого тренера</span></div>
+                <div><strong>12000+</strong><span>відповідей можна згенерувати</span></div>
+                <div><strong>95%</strong><span>фокус на природний тон</span></div>
+              </div>
+            </div>
+            <div class="landing-preview panel">
+              <div class="preview-bubble user-preview">Вона: дякую 🙂</div>
+              <div class="preview-bubble ai-preview">Будь ласка. Як твій день проходить, вдалося трохи відпочити?</div>
+              <div class="preview-card">
+                <span>Розбір тону</span>
+                <strong>68% зацікавленості</strong>
+                <div class="mini-progress"><i style="width:68%"></i></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-chat" class="view">
           <div class="chat-layout">
             <section class="panel chat-panel">
               <div id="messages" class="messages">
                 <article class="message assistant">
-                  <span>AI</span>
+                  <span class="message-avatar">G</span>
+                  <div class="message-content">
+                  <strong class="message-author">Помічник</strong>
                   <p>Спочатку зареєструйся або увійди в кабінеті. Після цього кидай переписку або опис ситуації, і я дам варіанти відповіді.</p>
+                  </div>
                 </article>
               </div>
 
@@ -190,6 +221,15 @@
             <p>Це веб-версія команд /mode, /style, /phrases, /avoid. Налаштування зберігаються окремо для кожного акаунта.</p>
           </div>
           <div class="settings-grid">
+            <div class="panel style-memory">
+              <h3>Мій стиль</h3>
+              <p>Вибери звички, і AI буде підлаштовувати відповіді під тебе.</p>
+              <label class="check-row"><input id="styleHumor" type="checkbox" checked /> люблю гумор</label>
+              <label class="check-row"><input id="styleShort" type="checkbox" checked /> короткі повідомлення</label>
+              <label class="check-row"><input id="styleNoSwears" type="checkbox" /> не люблю матюки</label>
+              <label class="check-row"><input id="styleConfident" type="checkbox" checked /> відповідаю впевнено</label>
+              <label class="check-row"><input id="styleNoCringe" type="checkbox" checked /> без крінжу</label>
+            </div>
             <label class="panel">
               Як ти зазвичай пишеш
               <textarea id="style" class="small-textarea" placeholder="коротко, без пафосу, трохи нагло">коротко, без пафосу, можна трохи жартувати</textarea>
@@ -302,6 +342,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=product-20260626"></script>
+    <script src="app.js?v=tone-20260626"></script>
   </body>
 </html>

@@ -35,6 +35,13 @@ const personForm = document.querySelector("#personForm");
 const personStatusText = document.querySelector("#personStatusText");
 const peopleList = document.querySelector("#peopleList");
 const favoritesList = document.querySelector("#favoritesList");
+const stylePrefs = {
+  humor: document.querySelector("#styleHumor"),
+  short: document.querySelector("#styleShort"),
+  noSwears: document.querySelector("#styleNoSwears"),
+  confident: document.querySelector("#styleConfident"),
+  noCringe: document.querySelector("#styleNoCringe"),
+};
 
 let currentUser = null;
 let selectedAdminUser = null;
@@ -139,10 +146,20 @@ function collectPayload(extraInstruction = "") {
   );
   const selectedPerson = getSelectedPerson();
   const profileText = personSummary(selectedPerson);
+  const preferenceText = [
+    stylePrefs.humor.checked && "користувач любить гумор",
+    stylePrefs.short.checked && "користувач любить короткі повідомлення",
+    stylePrefs.noSwears.checked && "користувач не хоче матюків",
+    stylePrefs.confident.checked && "користувач хоче впевнений тон",
+    stylePrefs.noCringe.checked && "без крінжу, пафосу і дивних компліментів",
+  ].filter(Boolean).join("; ");
   const additions = [];
 
   if (profileText) {
     additions.push(`Профіль співрозмовниці, який треба врахувати:\n${profileText}`);
+  }
+  if (preferenceText) {
+    additions.push(`Мій стиль спілкування: ${preferenceText}.`);
   }
   additions.push("Форматуй відповідь чисто, без Markdown-символів ###, ** або списків з зірочками.");
   additions.push("Режим грубуватого стилю має бути впевненим і живим, але без принижень, погроз, тиску та маніпуляцій.");
@@ -292,15 +309,55 @@ function extractVariants(text) {
   }));
 }
 
-function analyzePayload(payload) {
+function parseModelAnalysis(text) {
+  const cleaned = cleanMarkdown(text);
+  const block = extractSection(cleaned, ["AI-аналіз", "Розбір тону"], ["Найкращий варіант", "Ще варіанти", "Чому це працює", "Що не варто писати"]);
+  if (!block) return null;
+
+  const readLine = (labels) => {
+    for (const label of labels) {
+      const regex = new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, "i");
+      const match = block.match(regex);
+      if (match) return match[1].trim();
+    }
+    return "";
+  };
+
+  const interestRaw = readLine(["Зацікавленість", "Interest"]);
+  const interest = Math.max(0, Math.min(100, Number((interestRaw.match(/\d+/) || [""])[0]) || 0));
+  if (!interest) return null;
+
+  return {
+    interest,
+    interestLabel: interest >= 70 ? "висока" : interest >= 45 ? "середня" : "низька",
+    flirt: readLine(["Флірт", "Рівень флірту"]) || "низький",
+    mood: readLine(["Настрій"]) || "нейтральний",
+    recommendation: readLine(["Рекомендація"]) || "відповідати спокійно",
+    timing: readLine(["Коли відповідати", "Коли краще відповісти"]) || "зараз",
+    source: "model",
+  };
+}
+
+function scoreTextSeed(text) {
+  let score = 0;
+  for (const char of String(text || "")) score = (score + char.charCodeAt(0)) % 17;
+  return score - 8;
+}
+
+function analyzePayload(payload, responseText = "") {
   const text = payload.context || "";
-  const compact = text.toLowerCase();
-  let interest = 45;
-  if (text.length > 80) interest += 12;
-  if (/[?？]/.test(text)) interest += 12;
-  if (/(ахах|хаха|😂|🙂|\)|😉)/i.test(text)) interest += 10;
-  if (/(ок|ясно|дякую|спс|угу)$/i.test(compact.trim())) interest -= 12;
-  if (/(не хочу|відстань|не пиши|занята|зайнята)/i.test(compact)) interest -= 18;
+  const answer = responseText || "";
+  const compact = `${text}\n${answer}`.toLowerCase();
+  let interest = 38 + scoreTextSeed(`${text}${answer}`);
+  if (text.length > 80) interest += 9;
+  if (text.length > 220) interest += 7;
+  if (/[?？]/.test(text)) interest += 9;
+  if ((answer.match(/\?/g) || []).length) interest += 5;
+  if (/(ахах|хаха|😂|🙂|\)|😉|дякую|приємно|цікаво)/i.test(compact)) interest += 10;
+  if (/(кава|зустріч|побач|флірт|подоба|красива|вечір)/i.test(compact)) interest += 8;
+  if (/(ок|ясно|дякую|спс|угу)$/i.test(text.toLowerCase().trim())) interest -= 10;
+  if (/(не хочу|відстань|не пиши|зайнята|занята|не цікаво|відчеп)/i.test(compact)) interest -= 24;
+  if (/(мовчить|давно не відповідає|не відповідає)/i.test(payload.situation || "")) interest -= 8;
   interest = Math.max(8, Math.min(92, interest));
 
   const flirt = /(флірт|побачення|кава|зустріч|красива|подоба)/i.test(compact)
@@ -324,7 +381,8 @@ function analyzePayload(payload) {
         ? "через 5-10 хвилин"
         : "зараз";
 
-  return { interest, flirt, mood, recommendation, timing };
+  const interestLabel = interest >= 70 ? "висока" : interest >= 45 ? "середня" : "низька";
+  return { interest, interestLabel, flirt, mood, recommendation, timing, source: "local" };
 }
 
 function buildCoach(payload, responseText) {
@@ -368,7 +426,7 @@ function collapsible(title, preview, bodyHtml) {
 function renderAssistantResult(text, payload) {
   const cleaned = cleanMarkdown(text);
   const variants = extractVariants(cleaned);
-  const analysis = analyzePayload(payload || lastPayload || {});
+  const analysis = parseModelAnalysis(cleaned) || analyzePayload(payload || lastPayload || {}, cleaned);
   const redFlags = buildRedFlags(payload || lastPayload || {});
   const coach = buildCoach(payload || lastPayload || {}, cleaned);
   const why = extractSection(cleaned, ["Чому це працює", "Why it works"], ["Що не варто писати", "Попередження", "Avoid"]);
@@ -377,28 +435,34 @@ function renderAssistantResult(text, payload) {
   const article = document.createElement("article");
   article.className = "message assistant result-message";
   article.innerHTML = `
-    <span>AI</span>
+    <span class="message-avatar">G</span>
+    <div class="message-content">
+    <strong class="message-author">Помічник</strong>
     <div class="analysis-card">
       <div>
-        <p class="eyebrow">AI-аналіз</p>
-        <h3>${analysis.interest}% зацікавленості</h3>
+        <p class="eyebrow">Розбір тону</p>
+        <h3>${analysis.interest}%</h3>
+        <div class="analysis-progress" aria-label="Зацікавленість ${analysis.interest}%">
+          <i style="width:${analysis.interest}%"></i>
+        </div>
+        <small>Зацікавленість: ${escapeHtml(analysis.interestLabel)}${analysis.source === "model" ? " · оцінка моделі" : ""}</small>
       </div>
       <div class="analysis-grid">
-        <div><strong>${escapeHtml(analysis.flirt)}</strong><small>рівень флірту</small></div>
-        <div><strong>${escapeHtml(analysis.mood)}</strong><small>настрій</small></div>
-        <div><strong>${escapeHtml(analysis.recommendation)}</strong><small>рекомендація</small></div>
-        <div><strong>${escapeHtml(analysis.timing)}</strong><small>коли відповісти</small></div>
+        <div><span>💕</span><strong>${escapeHtml(analysis.flirt)}</strong><small>рівень флірту</small></div>
+        <div><span>🙂</span><strong>${escapeHtml(analysis.mood)}</strong><small>настрій</small></div>
+        <div><span>🟡</span><strong>${escapeHtml(analysis.recommendation)}</strong><small>рекомендація</small></div>
+        <div><span>🕒</span><strong>${escapeHtml(analysis.timing)}</strong><small>коли відповісти</small></div>
       </div>
     </div>
 
     <div class="result-grid">
       ${variants.map((item) => `
-        <section class="result-card" data-answer="${escapeHtml(item.text)}">
+        <section class="result-card ${escapeHtml(item.key)}" data-answer="${escapeHtml(item.text)}">
           <div class="result-title"><span>${item.icon}</span><strong>${escapeHtml(item.title)}</strong></div>
           <p>${escapeHtml(item.text)}</p>
           <div class="card-actions">
-            <button class="copy-answer" type="button">Скопіювати</button>
-            <button class="favorite-answer secondary" type="button">В обране</button>
+            <button class="copy-answer" type="button">📋 Скопіювати</button>
+            <button class="favorite-answer secondary" type="button">❤️ В обране</button>
           </div>
         </section>
       `).join("")}
@@ -406,10 +470,12 @@ function renderAssistantResult(text, payload) {
 
     <div class="result-actions">
       <button class="regenerate-answer" type="button">🎲 Згенерувати ще</button>
-      <span>Оціни відповідь</span>
-      <button class="rate-answer secondary" data-rate="like" type="button">👍 Сподобалось</button>
-      <button class="rate-answer secondary" data-rate="dislike" type="button">👎 Не підійшло</button>
-      <button class="retry-different hidden" type="button">Спробувати по-іншому</button>
+      <div class="rating-row">
+        <span>Оціни відповідь</span>
+        <button class="rate-answer secondary" data-rate="like" type="button">👍</button>
+        <button class="rate-answer secondary" data-rate="dislike" type="button">👎</button>
+        <button class="retry-different hidden" type="button">Спробувати по-іншому</button>
+      </div>
     </div>
 
     <div class="insights">
@@ -422,6 +488,7 @@ function renderAssistantResult(text, payload) {
       `)}
       ${why ? collapsible("Чому це працює", firstSentence(why, 90), `<p>${escapeHtml(why)}</p>`) : ""}
       ${avoid ? collapsible("Що не варто писати", firstSentence(avoid, 90), `<p>${escapeHtml(avoid)}</p>`) : ""}
+    </div>
     </div>
   `;
   messages.appendChild(article);
@@ -442,7 +509,13 @@ function addMessage(role, text, payload = null) {
     .filter(Boolean)
     .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join("");
-  article.innerHTML = `<span>${role === "user" ? "Ти" : "AI"}</span>${safeText}`;
+  article.innerHTML = `
+    <span class="message-avatar">${role === "user" ? "Ти" : "G"}</span>
+    <div class="message-content">
+      <strong class="message-author">${role === "user" ? "Ти" : "Помічник"}</strong>
+      ${safeText}
+    </div>
+  `;
   messages.appendChild(article);
   messages.scrollTop = messages.scrollHeight;
 }
@@ -453,6 +526,13 @@ function saveLocalSettings() {
     phraseBank: fields.phraseBank.value,
     avoidPhrases: fields.avoidPhrases.value,
     communicationMode: fields.communicationMode.value,
+    stylePrefs: {
+      humor: stylePrefs.humor.checked,
+      short: stylePrefs.short.checked,
+      noSwears: stylePrefs.noSwears.checked,
+      confident: stylePrefs.confident.checked,
+      noCringe: stylePrefs.noCringe.checked,
+    },
     profileName: document.querySelector("#profileName").value,
     profileAbout: document.querySelector("#profileAbout").value,
   };
@@ -463,6 +543,11 @@ function loadLocalSettings() {
   const data = readUserStore("settings", {});
   for (const key of ["style", "phraseBank", "avoidPhrases", "communicationMode"]) {
     if (data[key] && fields[key]) fields[key].value = data[key];
+  }
+  if (data.stylePrefs) {
+    for (const [key, input] of Object.entries(stylePrefs)) {
+      if (typeof data.stylePrefs[key] === "boolean") input.checked = data.stylePrefs[key];
+    }
   }
   document.querySelector("#profileName").value = data.profileName || "";
   document.querySelector("#profileAbout").value = data.profileAbout || "";
@@ -475,8 +560,11 @@ function clearSessionUi() {
   sessionStorage.clear();
   messages.innerHTML = `
     <article class="message assistant">
-      <span>AI</span>
+      <span class="message-avatar">G</span>
+      <div class="message-content">
+      <strong class="message-author">Помічник</strong>
       <p>Спочатку зареєструйся або увійди в кабінеті. Після цього кидай переписку або опис ситуації, і я дам варіанти відповіді.</p>
+      </div>
     </article>
   `;
   adminUsers.textContent = "Увійди під адміном і натисни “Оновити”.";
@@ -764,6 +852,12 @@ document.querySelectorAll(".nav-btn").forEach((button) => {
   });
 });
 
+document.querySelectorAll(".start-chat-btn, [data-view-button]").forEach((button) => {
+  button.addEventListener("click", () => {
+    showView(button.dataset.viewButton || "chat");
+  });
+});
+
 document.querySelectorAll(".scenario-card").forEach((card) => {
   card.addEventListener("click", () => {
     fields.situation.value = card.dataset.situation;
@@ -794,7 +888,7 @@ messages.addEventListener("click", async (event) => {
       createdAt: new Date().toLocaleString("uk-UA"),
     };
     saveFavorites([item, ...getFavorites()]);
-    button.textContent = "В обраному";
+    button.textContent = "❤️ В обраному";
     button.classList.add("success");
   }
 
