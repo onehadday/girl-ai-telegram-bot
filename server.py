@@ -303,7 +303,10 @@ def suggest(data):
                 continue
             seen.add(model)
             try:
-                return call_gemini(data, model)
+                result = call_gemini(data, model)
+                if not is_empty_model_reply(result.get("text", "")):
+                    return result
+                errors.append(f"{model}: empty response")
             except Exception as error:
                 errors.append(f"{model}: {error}")
                 continue
@@ -314,7 +317,10 @@ def suggest(data):
         }
     if os.getenv("OPENROUTER_API_KEY", "").strip():
         try:
-            return call_openrouter(data)
+            result = call_openrouter(data)
+            if not is_empty_model_reply(result.get("text", "")):
+                return result
+            raise RuntimeError("empty response")
         except Exception as error:
             return {
                 "text": f"OpenRouter зараз не відповів нормально, тому даю локальну підказку.\n\n{short_error(error)}\n\n{fallback_reply(data)}",
@@ -322,13 +328,28 @@ def suggest(data):
             }
     if os.getenv("OPENAI_API_KEY", "").strip():
         try:
-            return call_openai(data)
+            result = call_openai(data)
+            if not is_empty_model_reply(result.get("text", "")):
+                return result
+            raise RuntimeError("empty response")
         except Exception as error:
             return {
                 "text": f"OpenAI зараз не відповів нормально, тому даю локальну підказку.\n\n{short_error(error)}\n\n{fallback_reply(data)}",
                 "mode": "OpenAI недоступний",
             }
     return {"text": fallback_reply(data), "mode": "Локальний режим"}
+
+
+def is_empty_model_reply(text):
+    message = str(text or "").strip().lower()
+    if not message:
+        return True
+    return (
+        "не вдалося прочитати відповідь" in message
+        or "не вдалося прочитати відповідь gemini" in message
+        or "не вдалося прочитати відповідь openrouter" in message
+        or "не вдалося прочитати відповідь моделі" in message
+    )
 
 
 def short_error(error):
