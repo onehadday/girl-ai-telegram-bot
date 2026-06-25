@@ -19,6 +19,8 @@ const modeBadge = document.querySelector("#modeBadge");
 const authStatus = document.querySelector("#authStatus");
 const registerForm = document.querySelector("#registerForm");
 const loginForm = document.querySelector("#loginForm");
+const registerStatus = document.querySelector("#registerStatus");
+const loginStatus = document.querySelector("#loginStatus");
 const changePasswordForm = document.querySelector("#changePasswordForm");
 const refreshUsersBtn = document.querySelector("#refreshUsersBtn");
 const adminPasswordForm = document.querySelector("#adminPasswordForm");
@@ -195,6 +197,19 @@ function togglePassword(inputId, button) {
   button.textContent = isPassword ? "Сховати" : "Показати";
 }
 
+function setFormStatus(element, text, type = "info") {
+  element.textContent = text || "";
+  element.className = `form-status ${type}`;
+}
+
+function setSubmitBusy(form, isBusy, busyText) {
+  const button = form.querySelector('button[type="submit"]');
+  if (!button) return;
+  if (!button.dataset.defaultText) button.dataset.defaultText = button.textContent;
+  button.disabled = isBusy;
+  button.textContent = isBusy ? busyText : button.dataset.defaultText;
+}
+
 async function loadAdminUsers() {
   adminUsers.textContent = "Завантажую юзерів...";
   adminHistory.textContent = "Обери юзера зліва.";
@@ -331,38 +346,71 @@ generateBtn.addEventListener("click", async () => {
 
 registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const name = document.querySelector("#registerName").value.trim();
+  const email = document.querySelector("#registerEmail").value.trim();
+  const password = document.querySelector("#registerPassword").value;
+
+  if (!email || !password) {
+    setFormStatus(registerStatus, "Введи email і пароль.", "error");
+    return;
+  }
+  if (password.length < 6) {
+    setFormStatus(registerStatus, "Пароль має бути мінімум 6 символів.", "error");
+    return;
+  }
+
+  setFormStatus(registerStatus, "Створюю акаунт...", "info");
+  setSubmitBusy(registerForm, true, "Створюю...");
   try {
     const data = await apiJson("/api/register", {
       method: "POST",
       body: JSON.stringify({
-        name: document.querySelector("#registerName").value,
-        email: document.querySelector("#registerEmail").value,
-        password: document.querySelector("#registerPassword").value,
+        name,
+        email,
+        password,
       }),
     });
     updateAuthUi(data.user);
-    addMessage("assistant", data.user.is_admin ? "Акаунт створено. Ти адмін, бо це перший акаунт." : "Акаунт створено.");
+    setFormStatus(registerStatus, "Акаунт створено. Переношу в чат.", "success");
+    addMessage("assistant", data.user.is_admin ? "Акаунт створено. Ти адмін." : "Акаунт створено.");
+    await wait(400);
     showView("chat");
   } catch (error) {
-    addMessage("assistant", error.message);
+    setFormStatus(registerStatus, error.message, "error");
+  } finally {
+    setSubmitBusy(registerForm, false);
   }
 });
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const email = document.querySelector("#loginEmail").value.trim();
+  const password = document.querySelector("#loginPassword").value;
+
+  if (!email || !password) {
+    setFormStatus(loginStatus, "Введи email і пароль.", "error");
+    return;
+  }
+
+  setFormStatus(loginStatus, "Перевіряю акаунт...", "info");
+  setSubmitBusy(loginForm, true, "Входжу...");
   try {
     const data = await apiJson("/api/login", {
       method: "POST",
       body: JSON.stringify({
-        email: document.querySelector("#loginEmail").value,
-        password: document.querySelector("#loginPassword").value,
+        email,
+        password,
       }),
     });
     updateAuthUi(data.user);
+    setFormStatus(loginStatus, "Готово, ти увійшов.", "success");
     addMessage("assistant", "Ти увійшов.");
+    await wait(300);
     showView("chat");
   } catch (error) {
-    addMessage("assistant", error.message);
+    setFormStatus(loginStatus, error.message, "error");
+  } finally {
+    setSubmitBusy(loginForm, false);
   }
 });
 
@@ -417,4 +465,3 @@ saveProfileBtn.addEventListener("click", () => {
 
 loadLocalSettings();
 refreshMe();
-

@@ -156,16 +156,18 @@
             <form id="registerForm" class="panel auth-card">
               <h3>Створити акаунт</h3>
               <label>Ім'я <input id="registerName" autocomplete="name" placeholder="Саня" /></label>
-              <label>Email <input id="registerEmail" type="email" autocomplete="email" placeholder="you@gmail.com" /></label>
-              <label>Пароль <input id="registerPassword" type="password" autocomplete="new-password" placeholder="мінімум 6 символів" /></label>
+              <label>Email <input id="registerEmail" type="email" autocomplete="email" placeholder="you@gmail.com" required /></label>
+              <label>Пароль <input id="registerPassword" type="password" autocomplete="new-password" placeholder="мінімум 6 символів" required /></label>
               <button type="submit">Зареєструватись</button>
+              <p id="registerStatus" class="form-status" aria-live="polite"></p>
             </form>
 
             <form id="loginForm" class="panel auth-card">
               <h3>Увійти</h3>
-              <label>Email <input id="loginEmail" type="email" autocomplete="email" /></label>
-              <label>Пароль <input id="loginPassword" type="password" autocomplete="current-password" /></label>
+              <label>Email <input id="loginEmail" type="email" autocomplete="email" required /></label>
+              <label>Пароль <input id="loginPassword" type="password" autocomplete="current-password" required /></label>
               <button type="submit">Увійти</button>
+              <p id="loginStatus" class="form-status" aria-live="polite"></p>
             </form>
           </div>
 
@@ -242,6 +244,6 @@
       </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=auth-20260626"></script>
   </body>
 </html>
