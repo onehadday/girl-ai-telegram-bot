@@ -82,6 +82,39 @@ function renderResult(text) {
   result.innerHTML = html || escapeHtml(plainResult);
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestSuggestion(payload) {
+  const delays = [0, 1800, 4200];
+  let lastError;
+
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) {
+      renderResult("Сервер прокидається після паузи. Пробую ще раз...");
+      await wait(delays[attempt]);
+    }
+
+    try {
+      const response = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Помилка запиту");
+      }
+      return data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
 generateBtn.addEventListener("click", async () => {
   const payload = collectPayload();
   if (!payload.context) {
@@ -93,19 +126,11 @@ generateBtn.addEventListener("click", async () => {
   renderResult("Підбираю нормальну відповідь без нав'язливості...");
 
   try {
-    const response = await fetch("/api/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Помилка запиту");
-    }
+    const data = await requestSuggestion(payload);
     renderResult(data.text);
     modeBadge.textContent = data.mode || "готовий";
   } catch (error) {
-    renderResult(`Не вийшло отримати відповідь.\n\n${error.message}`);
+    renderResult(`Не вийшло отримати відповідь.\n\nСпробуй натиснути кнопку ще раз через 20-30 секунд. На безкоштовному Render сервер іноді засинає або довго прокидається.\n\nТехнічно: ${error.message}`);
     modeBadge.textContent = "помилка";
   } finally {
     generateBtn.disabled = false;
