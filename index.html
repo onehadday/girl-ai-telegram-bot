@@ -23,7 +23,7 @@
           <button class="nav-btn" data-view="settings">Налаштування</button>
           <button class="nav-btn" data-view="profile">Кабінет</button>
           <button class="nav-btn" data-view="billing">Тариф</button>
-          <button class="nav-btn" data-view="admin">Адмін</button>
+          <button class="nav-btn" data-view="admin">Історія</button>
         </nav>
 
         <div class="sidebar-note">
@@ -52,7 +52,7 @@
               <div id="messages" class="messages">
                 <article class="message assistant">
                   <span>AI</span>
-                  <p>Кидай переписку або опиши ситуацію. Я дам готове повідомлення, альтернативи й скажу, чого краще не писати.</p>
+                  <p>Спочатку зареєструйся або увійди в кабінеті. Після цього кидай переписку або опис ситуації, і я дам варіанти відповіді.</p>
                 </article>
               </div>
 
@@ -175,6 +175,18 @@
             <label>Про себе <textarea id="profileAbout" class="small-textarea" placeholder="Що враховувати в стилі спілкування"></textarea></label>
             <button id="saveProfileBtn">Зберегти стиль</button>
           </div>
+
+          <form id="changePasswordForm" class="panel auth-card">
+            <h3>Змінити мій пароль</h3>
+            <label>
+              Новий пароль
+              <div class="password-row">
+                <input id="newPassword" type="password" autocomplete="new-password" placeholder="мінімум 6 символів" />
+                <button id="toggleNewPasswordBtn" class="secondary" type="button">Показати</button>
+              </div>
+            </label>
+            <button type="submit">Змінити пароль</button>
+          </form>
         </section>
 
         <section id="view-billing" class="view">
@@ -191,18 +203,40 @@
 
         <section id="view-admin" class="view">
           <div class="section-head">
-            <h2>Адмін-панель</h2>
-            <p>Історія повідомлень потрібна для майбутньої модерації і правил сервісу.</p>
+            <h2>Історія користувачів</h2>
+            <p>Спочатку обери користувача. Потім побачиш тільки його повідомлення і відповіді AI.</p>
           </div>
-          <div class="panel admin-panel">
-            <div class="admin-head">
-              <div>
-                <h3>Історія запитів</h3>
-                <p>Видно тільки адміну. Перший зареєстрований акаунт стає адміном.</p>
+          <div class="admin-layout">
+            <div class="panel admin-panel">
+              <div class="admin-head">
+                <div>
+                  <h3>Юзери</h3>
+                  <p>Видно сайт-користувачів і Telegram-користувачів.</p>
+                </div>
+                <button id="refreshUsersBtn">Оновити</button>
               </div>
-              <button id="refreshHistoryBtn">Оновити</button>
+              <div id="adminUsers" class="users-list">Увійди під адміном і натисни “Оновити”.</div>
             </div>
-            <div id="adminHistory" class="history-list">Увійди під адміном і натисни “Оновити”.</div>
+
+            <div class="panel admin-panel">
+              <div class="admin-head">
+                <div>
+                  <h3 id="selectedUserTitle">Історія</h3>
+                  <p id="selectedUserHint">Обери юзера зліва.</p>
+                </div>
+              </div>
+
+              <form id="adminPasswordForm" class="reset-card hidden">
+                <h4>Скинути пароль користувача</h4>
+                <div class="password-row">
+                  <input id="adminNewPassword" type="password" placeholder="новий пароль" />
+                  <button id="toggleAdminPasswordBtn" class="secondary" type="button">Показати</button>
+                </div>
+                <button type="submit">Змінити пароль</button>
+              </form>
+
+              <div id="adminHistory" class="history-list">Історія з'явиться тут.</div>
+            </div>
           </div>
         </section>
       </main>

@@ -19,9 +19,17 @@ const modeBadge = document.querySelector("#modeBadge");
 const authStatus = document.querySelector("#authStatus");
 const registerForm = document.querySelector("#registerForm");
 const loginForm = document.querySelector("#loginForm");
-const refreshHistoryBtn = document.querySelector("#refreshHistoryBtn");
+const changePasswordForm = document.querySelector("#changePasswordForm");
+const refreshUsersBtn = document.querySelector("#refreshUsersBtn");
+const adminPasswordForm = document.querySelector("#adminPasswordForm");
+const toggleNewPasswordBtn = document.querySelector("#toggleNewPasswordBtn");
+const toggleAdminPasswordBtn = document.querySelector("#toggleAdminPasswordBtn");
+const adminUsers = document.querySelector("#adminUsers");
 const adminHistory = document.querySelector("#adminHistory");
+const selectedUserTitle = document.querySelector("#selectedUserTitle");
+const selectedUserHint = document.querySelector("#selectedUserHint");
 let currentUser = null;
+let selectedAdminUser = null;
 
 function collectPayload() {
   return Object.fromEntries(
@@ -180,32 +188,97 @@ function showView(name) {
   document.querySelector(`#view-${name}`).classList.add("active");
 }
 
-async function loadAdminHistory() {
-  adminHistory.textContent = "Завантажую історію...";
+function togglePassword(inputId, button) {
+  const input = document.querySelector(inputId);
+  const isPassword = input.type === "password";
+  input.type = isPassword ? "text" : "password";
+  button.textContent = isPassword ? "Сховати" : "Показати";
+}
+
+async function loadAdminUsers() {
+  adminUsers.textContent = "Завантажую юзерів...";
+  adminHistory.textContent = "Обери юзера зліва.";
+  adminPasswordForm.classList.add("hidden");
+  selectedAdminUser = null;
+
   try {
-    const data = await apiJson("/api/admin/history");
-    if (!data.items.length) {
-      adminHistory.textContent = "Історія поки порожня.";
+    const data = await apiJson("/api/admin/users");
+    if (!data.users.length) {
+      adminUsers.textContent = "Юзерів поки немає.";
       return;
     }
-    adminHistory.innerHTML = data.items
-      .map((item) => {
-        const who = item.user_email || item.display_name || "Гість";
+
+    adminUsers.innerHTML = data.users
+      .map((user) => {
+        const label = user.kind === "telegram" ? "Telegram" : user.is_admin ? "Сайт · адмін" : "Сайт";
+        const name = user.name || user.email || "Користувач";
+        const sub = user.email || `ID: ${user.id}`;
         return `
-          <article class="history-item">
-            <div class="history-meta">
-              <span>${escapeHtml(item.created_at || "")}</span>
-              <span>${escapeHtml(item.source || "")}</span>
-              <span>${escapeHtml(who)}</span>
-              <span>${escapeHtml(item.mode || "")}</span>
-            </div>
-            <h4>Що написали</h4>
-            <p>${escapeHtml(item.prompt || "")}</p>
-            <h4>Що відповів AI</h4>
-            <p>${escapeHtml(cleanMarkdown(item.response || ""))}</p>
-          </article>
+          <button class="user-card" data-kind="${escapeHtml(user.kind)}" data-id="${escapeHtml(user.id)}">
+            <strong>${escapeHtml(name)}</strong>
+            <span>${escapeHtml(label)} · ${escapeHtml(sub)}</span>
+            <span>${Number(user.messages_count || 0)} повідомлень · ${escapeHtml(user.last_seen || "ще не писав")}</span>
+          </button>
         `;
       })
+      .join("");
+
+    document.querySelectorAll(".user-card").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".user-card").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        selectedAdminUser = data.users.find(
+          (user) => String(user.id) === button.dataset.id && user.kind === button.dataset.kind
+        );
+        selectedUserTitle.textContent = selectedAdminUser.name || selectedAdminUser.email || "Користувач";
+        selectedUserHint.textContent = selectedAdminUser.kind === "telegram"
+          ? "Telegram-користувач. Пароль змінити не можна."
+          : selectedAdminUser.email;
+        adminPasswordForm.classList.toggle("hidden", selectedAdminUser.kind !== "site");
+        loadAdminHistory();
+      });
+    });
+  } catch (error) {
+    adminUsers.textContent = error.message;
+  }
+}
+
+async function loadAdminHistory() {
+  if (!selectedAdminUser) {
+    adminHistory.textContent = "Обери юзера зліва.";
+    return;
+  }
+
+  adminHistory.textContent = "Завантажую історію...";
+  try {
+    const params = new URLSearchParams();
+    if (selectedAdminUser.kind === "site") {
+      params.set("user_id", selectedAdminUser.id);
+    } else {
+      params.set("source", "telegram");
+      params.set("external_id", selectedAdminUser.id);
+    }
+
+    const data = await apiJson(`/api/admin/history?${params.toString()}`);
+    if (!data.items.length) {
+      adminHistory.textContent = "У цього юзера історія поки порожня.";
+      return;
+    }
+
+    adminHistory.innerHTML = data.items
+      .map((item) => `
+        <article class="history-item">
+          <div class="history-meta">
+            <span>${escapeHtml(item.created_at || "")}</span>
+            <span>${escapeHtml(item.source || "")}</span>
+            <span>${escapeHtml(item.mode || "")}</span>
+          </div>
+          <h4>Що написали</h4>
+          <p>${escapeHtml(item.prompt || "")}</p>
+          <h4>Що відповів AI</h4>
+          <p>${escapeHtml(cleanMarkdown(item.response || ""))}</p>
+        </article>
+      `)
       .join("");
   } catch (error) {
     adminHistory.textContent = error.message;
@@ -215,7 +288,7 @@ async function loadAdminHistory() {
 document.querySelectorAll(".nav-btn").forEach((button) => {
   button.addEventListener("click", () => {
     showView(button.dataset.view);
-    if (button.dataset.view === "admin") loadAdminHistory();
+    if (button.dataset.view === "admin") loadAdminUsers();
   });
 });
 
@@ -230,6 +303,11 @@ document.querySelectorAll(".scenario-card").forEach((card) => {
 
 generateBtn.addEventListener("click", async () => {
   const payload = collectPayload();
+  if (!currentUser) {
+    addMessage("assistant", "Спочатку зареєструйся або увійди в Кабінеті. Без акаунта сайт не надсилає повідомлення.");
+    showView("profile");
+    return;
+  }
   if (!payload.context) {
     addMessage("assistant", "Додай переписку або короткий опис ситуації. Без контексту порада буде занадто загальна.");
     return;
@@ -293,8 +371,43 @@ logoutBtn.addEventListener("click", async () => {
   updateAuthUi(null);
 });
 
+changePasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await apiJson("/api/change-password", {
+      method: "POST",
+      body: JSON.stringify({ new_password: document.querySelector("#newPassword").value }),
+    });
+    document.querySelector("#newPassword").value = "";
+    addMessage("assistant", "Пароль змінено.");
+    showView("chat");
+  } catch (error) {
+    addMessage("assistant", error.message);
+  }
+});
+
+adminPasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!selectedAdminUser || selectedAdminUser.kind !== "site") return;
+  try {
+    await apiJson("/api/admin/reset-password", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: selectedAdminUser.id,
+        new_password: document.querySelector("#adminNewPassword").value,
+      }),
+    });
+    document.querySelector("#adminNewPassword").value = "";
+    adminHistory.textContent = "Пароль користувача змінено. Передай йому новий пароль приватно.";
+  } catch (error) {
+    adminHistory.textContent = error.message;
+  }
+});
+
 loginBtn.addEventListener("click", () => showView("profile"));
-refreshHistoryBtn.addEventListener("click", loadAdminHistory);
+refreshUsersBtn.addEventListener("click", loadAdminUsers);
+toggleNewPasswordBtn.addEventListener("click", () => togglePassword("#newPassword", toggleNewPasswordBtn));
+toggleAdminPasswordBtn.addEventListener("click", () => togglePassword("#adminNewPassword", toggleAdminPasswordBtn));
 
 saveProfileBtn.addEventListener("click", () => {
   saveLocalSettings();

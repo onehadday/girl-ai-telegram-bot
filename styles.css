@@ -381,6 +381,57 @@ button:disabled {
   gap: 12px;
 }
 
+.admin-layout {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.users-list {
+  display: grid;
+  gap: 10px;
+}
+
+.user-card {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #f8fbff;
+  color: var(--text);
+  text-align: left;
+  display: grid;
+  gap: 5px;
+}
+
+.user-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.user-card strong,
+.user-card span {
+  display: block;
+}
+
+.user-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reset-card {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.password-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
 .history-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -451,6 +502,7 @@ button:disabled {
   .cards,
   .settings-grid,
   .auth-grid,
+  .admin-layout,
   .nav {
     grid-template-columns: 1fr;
   }

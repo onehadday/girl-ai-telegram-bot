@@ -2,14 +2,17 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from storage import (
     authenticate_user,
+    change_user_password,
     create_session,
     create_user,
     delete_session,
     get_user_by_session,
     init_db,
+    list_people,
     list_interactions,
     log_interaction,
 )
@@ -339,11 +342,15 @@ def summarize_api_errors(errors):
 
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/api/me":
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/api/me":
             self.handle_me()
             return
-        if self.path == "/api/admin/history":
+        if path == "/api/admin/history":
             self.handle_history()
+            return
+        if path == "/api/admin/users":
+            self.handle_users()
             return
         super().do_GET()
 
@@ -357,15 +364,24 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/logout":
             self.handle_logout()
             return
+        if self.path == "/api/change-password":
+            self.handle_change_password()
+            return
+        if self.path == "/api/admin/reset-password":
+            self.handle_reset_password()
+            return
         if self.path != "/api/suggest":
             self.send_error(404)
             return
 
         length = int(self.headers.get("Content-Length", "0"))
         try:
+            user = self.current_user()
+            if not user:
+                self.send_json(401, {"error": "Спочатку зареєструйся або увійди в акаунт."})
+                return
             data = json.loads(self.rfile.read(length).decode("utf-8"))
             result = suggest(data)
-            user = self.current_user()
             log_interaction(
                 "site",
                 data.get("context", ""),
@@ -410,15 +426,65 @@ class Handler(SimpleHTTPRequestHandler):
         delete_session(self.session_token())
         self.send_session_json(200, "", {"ok": True})
 
+    def handle_change_password(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди."})
+            return
+        data = self.read_json()
+        new_password = data.get("new_password", "")
+        if len(new_password) < 6:
+            self.send_json(400, {"error": "Новий пароль має бути хоча б 6 символів."})
+            return
+        change_user_password(user["id"], new_password)
+        self.send_json(200, {"ok": True})
+
     def handle_me(self):
         self.send_json(200, {"user": self.current_user()})
+
+    def handle_users(self):
+        user = self.current_user()
+        if not user or not user.get("is_admin"):
+            self.send_json(403, {"error": "Доступ тільки для адміна."})
+            return
+        self.send_json(200, {"users": list_people()})
 
     def handle_history(self):
         user = self.current_user()
         if not user or not user.get("is_admin"):
             self.send_json(403, {"error": "Доступ тільки для адміна."})
             return
-        self.send_json(200, {"items": list_interactions()})
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        user_id = query.get("user_id", [""])[0]
+        source = query.get("source", [""])[0]
+        external_id = query.get("external_id", [""])[0]
+        self.send_json(
+            200,
+            {
+                "items": list_interactions(
+                    user_id=int(user_id) if user_id else None,
+                    source=source or None,
+                    external_id=external_id or None,
+                )
+            },
+        )
+
+    def handle_reset_password(self):
+        admin = self.current_user()
+        if not admin or not admin.get("is_admin"):
+            self.send_json(403, {"error": "Доступ тільки для адміна."})
+            return
+        data = self.read_json()
+        user_id = data.get("user_id")
+        new_password = data.get("new_password", "")
+        if not user_id:
+            self.send_json(400, {"error": "Обери користувача сайту."})
+            return
+        if len(new_password) < 6:
+            self.send_json(400, {"error": "Новий пароль має бути хоча б 6 символів."})
+            return
+        change_user_password(int(user_id), new_password)
+        self.send_json(200, {"ok": True})
 
     def read_json(self):
         length = int(self.headers.get("Content-Length", "0"))
