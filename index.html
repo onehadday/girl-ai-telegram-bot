@@ -20,10 +20,12 @@
         <nav class="nav">
           <button class="nav-btn active" data-view="chat">Чат</button>
           <button class="nav-btn" data-view="situations">Ситуації</button>
-          <button class="nav-btn" data-view="settings">Налаштування</button>
+          <button class="nav-btn" data-view="people">Профілі</button>
+          <button class="nav-btn" data-view="favorites">Обране</button>
+          <button class="nav-btn" data-view="settings">Стиль</button>
           <button class="nav-btn" data-view="profile">Кабінет</button>
           <button class="nav-btn" data-view="billing">Тариф</button>
-          <button class="nav-btn" data-view="admin">Історія</button>
+          <button class="nav-btn" data-view="admin" data-admin-only="true">Історія</button>
         </nav>
 
         <div class="sidebar-note">
@@ -35,7 +37,7 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Веб-версія Telegram-бота</p>
+            <p class="eyebrow">AI-тренер переписки</p>
             <h1>Що їй написати?</h1>
           </div>
           <div class="top-actions">
@@ -81,7 +83,7 @@
                   <option>Нормальний</option>
                   <option>Флірт</option>
                   <option>Спокійний джентльмен</option>
-                  <option>Режим бидла: грубо, з матюками, але без принижень</option>
+                  <option>Режим бидла: грубувато, з матюками, але без принижень і тиску</option>
                 </select>
               </label>
 
@@ -109,8 +111,64 @@
                 Ціль
                 <input id="goal" value="підтримати нормальне спілкування" />
               </label>
+
+              <label>
+                Профіль співрозмовниці
+                <select id="personProfile">
+                  <option value="">Без профілю</option>
+                </select>
+              </label>
             </aside>
           </div>
+        </section>
+
+        <section id="view-people" class="view">
+          <div class="section-head">
+            <p class="eyebrow">Персоналізація</p>
+            <h2>Профілі співрозмовниць</h2>
+            <p>Збережи важливі деталі про людину, і сайт врахує їх під час генерації відповіді.</p>
+          </div>
+          <div class="people-layout">
+            <form id="personForm" class="panel profile-editor">
+              <h3>Новий профіль</h3>
+              <label>Ім'я <input id="personName" placeholder="Наприклад: Аня" /></label>
+              <label>Вік <input id="personAge" placeholder="за бажанням" /></label>
+              <label>Стиль спілкування <input id="personStyle" placeholder="спокійна, жартує, відповідає коротко" /></label>
+              <label>Що їй подобається <textarea id="personLikes" class="small-textarea"></textarea></label>
+              <label>Що їй не подобається <textarea id="personDislikes" class="small-textarea"></textarea></label>
+              <label>Важливі факти <textarea id="personFacts" class="small-textarea"></textarea></label>
+              <label>
+                Статус
+                <select id="personStatus">
+                  <option>тільки переписка</option>
+                  <option>флірт</option>
+                  <option>були на зустрічі</option>
+                  <option>у стосунках</option>
+                  <option>складна ситуація</option>
+                </select>
+              </label>
+              <button type="submit">Зберегти профіль</button>
+              <p class="form-status" id="personStatusText"></p>
+            </form>
+            <div class="panel people-panel">
+              <div class="admin-head">
+                <div>
+                  <h3>Збережені профілі</h3>
+                  <p>Кожен акаунт бачить тільки свої профілі.</p>
+                </div>
+              </div>
+              <div id="peopleList" class="people-list">Профілі з'являться тут.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-favorites" class="view">
+          <div class="section-head">
+            <p class="eyebrow">Твої найкращі фрази</p>
+            <h2>Обране</h2>
+            <p>Зберігай сильні відповіді, щоб швидко повертатися до них. Обране прив'язане до твого акаунта.</p>
+          </div>
+          <div id="favoritesList" class="favorites-grid">Обрані відповіді з'являться тут.</div>
         </section>
 
         <section id="view-situations" class="view">
@@ -129,7 +187,7 @@
         <section id="view-settings" class="view">
           <div class="section-head">
             <h2>Налаштування спілкування</h2>
-            <p>Це веб-версія команд /mode, /style, /phrases, /avoid.</p>
+            <p>Це веб-версія команд /mode, /style, /phrases, /avoid. Налаштування зберігаються окремо для кожного акаунта.</p>
           </div>
           <div class="settings-grid">
             <label class="panel">
@@ -244,6 +302,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=auth-20260626"></script>
+    <script src="app.js?v=product-20260626"></script>
   </body>
 </html>
