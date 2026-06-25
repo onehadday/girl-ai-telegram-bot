@@ -417,3 +417,4 @@ saveProfileBtn.addEventListener("click", () => {
 
 loadLocalSettings();
 refreshMe();
+
