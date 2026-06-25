@@ -163,7 +163,7 @@ def create_user(name, email, password):
     clean_email = email.strip().lower()
     admin_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
     with db() as connection:
-        is_admin = first_user_will_be_admin(connection) or (admin_email and clean_email == admin_email)
+        is_admin = clean_email == admin_email if admin_email else first_user_will_be_admin(connection)
         if using_postgres():
             row = connection.execute(
                 """
@@ -364,3 +364,4 @@ def list_interactions(limit=80, user_id=None, source=None, external_id=None):
             params,
         ).fetchall()
         return [dict(row) for row in rows]
+
