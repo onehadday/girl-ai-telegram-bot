@@ -3,6 +3,16 @@ import json
 import os
 import urllib.error
 import urllib.request
+from storage import (
+    authenticate_user,
+    create_session,
+    create_user,
+    delete_session,
+    get_user_by_session,
+    init_db,
+    list_interactions,
+    log_interaction,
+)
 
 
 PORT = int(os.getenv("PORT", "8000"))
@@ -328,7 +338,25 @@ def summarize_api_errors(errors):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/api/me":
+            self.handle_me()
+            return
+        if self.path == "/api/admin/history":
+            self.handle_history()
+            return
+        super().do_GET()
+
     def do_POST(self):
+        if self.path == "/api/register":
+            self.handle_register()
+            return
+        if self.path == "/api/login":
+            self.handle_login()
+            return
+        if self.path == "/api/logout":
+            self.handle_logout()
+            return
         if self.path != "/api/suggest":
             self.send_error(404)
             return
@@ -337,9 +365,77 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             data = json.loads(self.rfile.read(length).decode("utf-8"))
             result = suggest(data)
+            user = self.current_user()
+            log_interaction(
+                "site",
+                data.get("context", ""),
+                result.get("text", ""),
+                result.get("mode", ""),
+                user=user,
+                display_name=user["name"] if user else "Гість",
+            )
             self.send_json(200, result)
         except Exception as error:
             self.send_json(500, {"error": str(error)})
+
+    def handle_register(self):
+        data = self.read_json()
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip()
+        password = data.get("password", "")
+        if not email or not password:
+            self.send_json(400, {"error": "Email і пароль обов'язкові."})
+            return
+        if len(password) < 6:
+            self.send_json(400, {"error": "Пароль має бути хоча б 6 символів."})
+            return
+        try:
+            user = create_user(name, email, password)
+        except Exception:
+            self.send_json(400, {"error": "Такий email уже зареєстрований."})
+            return
+        token = create_session(user["id"])
+        self.send_session_json(200, token, {"user": user})
+
+    def handle_login(self):
+        data = self.read_json()
+        user = authenticate_user(data.get("email", ""), data.get("password", ""))
+        if not user:
+            self.send_json(401, {"error": "Неправильний email або пароль."})
+            return
+        token = create_session(user["id"])
+        self.send_session_json(200, token, {"user": user})
+
+    def handle_logout(self):
+        delete_session(self.session_token())
+        self.send_session_json(200, "", {"ok": True})
+
+    def handle_me(self):
+        self.send_json(200, {"user": self.current_user()})
+
+    def handle_history(self):
+        user = self.current_user()
+        if not user or not user.get("is_admin"):
+            self.send_json(403, {"error": "Доступ тільки для адміна."})
+            return
+        self.send_json(200, {"items": list_interactions()})
+
+    def read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if not length:
+            return {}
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
+    def session_token(self):
+        cookie = self.headers.get("Cookie", "")
+        for part in cookie.split(";"):
+            key, _, value = part.strip().partition("=")
+            if key == "girl_ai_session":
+                return value
+        return ""
+
+    def current_user(self):
+        return get_user_by_session(self.session_token())
 
     def send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -349,9 +445,22 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_session_json(self, status, token, payload):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        if token:
+            self.send_header("Set-Cookie", f"girl_ai_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000")
+        else:
+            self.send_header("Set-Cookie", "girl_ai_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
 
 if __name__ == "__main__":
     load_env_file()
+    init_db()
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"Dating assistant is running: http://127.0.0.1:{PORT}")
     server.serve_forever()

@@ -6,6 +6,7 @@ import urllib.parse
 import urllib.request
 
 from server import load_env_file, suggest
+from storage import log_interaction
 
 
 API_BASE = "https://api.telegram.org/bot{token}/{method}"
@@ -197,6 +198,18 @@ def handle_message(token, message):
 
     send_message(token, chat_id, "Думаю, що можна відповісти...")
     result = suggest(make_payload_for_user(text, message))
+    user = message.get("from", {})
+    display_name = " ".join(
+        item for item in [user.get("first_name", ""), user.get("last_name", "")] if item
+    ) or user.get("username", "") or "Telegram"
+    log_interaction(
+        "telegram",
+        text,
+        result.get("text", ""),
+        result.get("mode", ""),
+        display_name=display_name,
+        external_id=str(user.get("id", "")),
+    )
     send_message(token, chat_id, result.get("text", "Не вдалося підготувати відповідь."))
 
 

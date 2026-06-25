@@ -13,9 +13,15 @@ const fields = {
 const messages = document.querySelector("#messages");
 const generateBtn = document.querySelector("#generateBtn");
 const loginBtn = document.querySelector("#loginBtn");
+const logoutBtn = document.querySelector("#logoutBtn");
 const saveProfileBtn = document.querySelector("#saveProfileBtn");
 const modeBadge = document.querySelector("#modeBadge");
-let lastPlainAnswer = "";
+const authStatus = document.querySelector("#authStatus");
+const registerForm = document.querySelector("#registerForm");
+const loginForm = document.querySelector("#loginForm");
+const refreshHistoryBtn = document.querySelector("#refreshHistoryBtn");
+const adminHistory = document.querySelector("#adminHistory");
+let currentUser = null;
 
 function collectPayload() {
   return Object.fromEntries(
@@ -30,7 +36,7 @@ function setBusy(isBusy) {
 }
 
 function cleanMarkdown(text) {
-  return text
+  return String(text || "")
     .replace(/\r/g, "")
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/^\s*[-*]\s+/gm, "")
@@ -44,7 +50,7 @@ function cleanMarkdown(text) {
 }
 
 function escapeHtml(text) {
-  return text
+  return String(text || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -78,8 +84,7 @@ function formatAnswer(text) {
 function addMessage(role, text) {
   const article = document.createElement("article");
   article.className = `message ${role}`;
-  const { cleaned, html } = formatAnswer(text);
-  if (role === "assistant") lastPlainAnswer = cleaned;
+  const { html } = formatAnswer(text);
   article.innerHTML = `<span>${role === "user" ? "Ти" : "AI"}</span>${html}`;
   messages.appendChild(article);
   messages.scrollTop = messages.scrollHeight;
@@ -87,6 +92,17 @@ function addMessage(role, text) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function apiJson(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Помилка запиту");
+  return data;
 }
 
 async function requestSuggestion(payload) {
@@ -100,14 +116,10 @@ async function requestSuggestion(payload) {
     }
 
     try {
-      const response = await fetch("/api/suggest", {
+      return await apiJson("/api/suggest", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Помилка запиту");
-      return data;
     } catch (error) {
       lastError = error;
     }
@@ -138,12 +150,72 @@ function loadLocalSettings() {
   document.querySelector("#profileAbout").value = data.profileAbout || "";
 }
 
+function updateAuthUi(user) {
+  currentUser = user;
+  if (user) {
+    authStatus.textContent = user.is_admin ? `${user.name} · адмін` : user.name;
+    loginBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
+  } else {
+    authStatus.textContent = "гість";
+    loginBtn.classList.remove("hidden");
+    logoutBtn.classList.add("hidden");
+  }
+}
+
+async function refreshMe() {
+  try {
+    const data = await apiJson("/api/me");
+    updateAuthUi(data.user);
+  } catch {
+    updateAuthUi(null);
+  }
+}
+
+function showView(name) {
+  document.querySelectorAll(".nav-btn").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === name);
+  });
+  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+  document.querySelector(`#view-${name}`).classList.add("active");
+}
+
+async function loadAdminHistory() {
+  adminHistory.textContent = "Завантажую історію...";
+  try {
+    const data = await apiJson("/api/admin/history");
+    if (!data.items.length) {
+      adminHistory.textContent = "Історія поки порожня.";
+      return;
+    }
+    adminHistory.innerHTML = data.items
+      .map((item) => {
+        const who = item.user_email || item.display_name || "Гість";
+        return `
+          <article class="history-item">
+            <div class="history-meta">
+              <span>${escapeHtml(item.created_at || "")}</span>
+              <span>${escapeHtml(item.source || "")}</span>
+              <span>${escapeHtml(who)}</span>
+              <span>${escapeHtml(item.mode || "")}</span>
+            </div>
+            <h4>Що написали</h4>
+            <p>${escapeHtml(item.prompt || "")}</p>
+            <h4>Що відповів AI</h4>
+            <p>${escapeHtml(cleanMarkdown(item.response || ""))}</p>
+          </article>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    adminHistory.textContent = error.message;
+  }
+}
+
 document.querySelectorAll(".nav-btn").forEach((button) => {
   button.addEventListener("click", () => {
-    document.querySelectorAll(".nav-btn").forEach((item) => item.classList.remove("active"));
-    document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
-    button.classList.add("active");
-    document.querySelector(`#view-${button.dataset.view}`).classList.add("active");
+    showView(button.dataset.view);
+    if (button.dataset.view === "admin") loadAdminHistory();
   });
 });
 
@@ -151,7 +223,7 @@ document.querySelectorAll(".scenario-card").forEach((card) => {
   card.addEventListener("click", () => {
     fields.situation.value = card.dataset.situation;
     fields.goal.value = card.dataset.goal;
-    document.querySelector('[data-view="chat"]').click();
+    showView("chat");
     fields.context.focus();
   });
 });
@@ -179,14 +251,56 @@ generateBtn.addEventListener("click", async () => {
   }
 });
 
-loginBtn.addEventListener("click", () => {
-  document.querySelector('[data-view="profile"]').click();
+registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const data = await apiJson("/api/register", {
+      method: "POST",
+      body: JSON.stringify({
+        name: document.querySelector("#registerName").value,
+        email: document.querySelector("#registerEmail").value,
+        password: document.querySelector("#registerPassword").value,
+      }),
+    });
+    updateAuthUi(data.user);
+    addMessage("assistant", data.user.is_admin ? "Акаунт створено. Ти адмін, бо це перший акаунт." : "Акаунт створено.");
+    showView("chat");
+  } catch (error) {
+    addMessage("assistant", error.message);
+  }
 });
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const data = await apiJson("/api/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: document.querySelector("#loginEmail").value,
+        password: document.querySelector("#loginPassword").value,
+      }),
+    });
+    updateAuthUi(data.user);
+    addMessage("assistant", "Ти увійшов.");
+    showView("chat");
+  } catch (error) {
+    addMessage("assistant", error.message);
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await apiJson("/api/logout", { method: "POST", body: "{}" });
+  updateAuthUi(null);
+});
+
+loginBtn.addEventListener("click", () => showView("profile"));
+refreshHistoryBtn.addEventListener("click", loadAdminHistory);
 
 saveProfileBtn.addEventListener("click", () => {
   saveLocalSettings();
-  addMessage("assistant", "Кабінет збережено в цьому браузері. Реальна реєстрація потребує бази даних, її в Telegram-боті ще не було.");
-  document.querySelector('[data-view="chat"]').click();
+  addMessage("assistant", "Стиль збережено в цьому браузері.");
+  showView("chat");
 });
 
 loadLocalSettings();
+refreshMe();

@@ -18,3 +18,5 @@ services:
         value: gemini-2.0-flash-lite
       - key: PUBLIC_URL
         sync: false
+      - key: ADMIN_EMAIL
+        sync: false

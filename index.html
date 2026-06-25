@@ -39,8 +39,10 @@
             <h1>Що їй написати?</h1>
           </div>
           <div class="top-actions">
+            <span id="authStatus" class="auth-status">гість</span>
             <span id="modeBadge" class="badge">готовий</span>
             <button id="loginBtn" class="secondary">Увійти</button>
+            <button id="logoutBtn" class="secondary hidden">Вийти</button>
           </div>
         </header>
 
@@ -148,12 +150,30 @@
         <section id="view-profile" class="view">
           <div class="section-head">
             <h2>Особистий кабінет</h2>
-            <p>У поточному боті немає бази користувачів, тому кабінет зберігається в цьому браузері.</p>
+            <p>Реєстрація потрібна, щоб адмін бачив історію сайту по користувачах, а ти міг зберігати стиль.</p>
           </div>
+          <div class="auth-grid">
+            <form id="registerForm" class="panel auth-card">
+              <h3>Створити акаунт</h3>
+              <label>Ім'я <input id="registerName" autocomplete="name" placeholder="Саня" /></label>
+              <label>Email <input id="registerEmail" type="email" autocomplete="email" placeholder="you@gmail.com" /></label>
+              <label>Пароль <input id="registerPassword" type="password" autocomplete="new-password" placeholder="мінімум 6 символів" /></label>
+              <button type="submit">Зареєструватись</button>
+            </form>
+
+            <form id="loginForm" class="panel auth-card">
+              <h3>Увійти</h3>
+              <label>Email <input id="loginEmail" type="email" autocomplete="email" /></label>
+              <label>Пароль <input id="loginPassword" type="password" autocomplete="current-password" /></label>
+              <button type="submit">Увійти</button>
+            </form>
+          </div>
+
           <div class="panel profile-card">
+            <h3>Профіль стилю</h3>
             <label>Ім'я <input id="profileName" placeholder="Наприклад: Саня" /></label>
             <label>Про себе <textarea id="profileAbout" class="small-textarea" placeholder="Що враховувати в стилі спілкування"></textarea></label>
-            <button id="saveProfileBtn">Зберегти кабінет</button>
+            <button id="saveProfileBtn">Зберегти стиль</button>
           </div>
         </section>
 
@@ -172,10 +192,17 @@
         <section id="view-admin" class="view">
           <div class="section-head">
             <h2>Адмін-панель</h2>
-            <p>У боті немає адмін-команд. Це місце залишено під майбутні логи, користувачів і налаштування.</p>
+            <p>Історія повідомлень потрібна для майбутньої модерації і правил сервісу.</p>
           </div>
-          <div class="panel todo-panel">
-            TODO: підключити реальну базу даних, список користувачів і статистику запитів.
+          <div class="panel admin-panel">
+            <div class="admin-head">
+              <div>
+                <h3>Історія запитів</h3>
+                <p>Видно тільки адміну. Перший зареєстрований акаунт стає адміном.</p>
+              </div>
+              <button id="refreshHistoryBtn">Оновити</button>
+            </div>
+            <div id="adminHistory" class="history-list">Увійди під адміном і натисни “Оновити”.</div>
           </div>
         </section>
       </main>
