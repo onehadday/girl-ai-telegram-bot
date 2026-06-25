@@ -155,17 +155,42 @@ button:disabled {
   flex-direction: column;
 }
 
-pre {
+.result-box {
   flex: 1;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 18px 0 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 18px;
-  background: #fbfcfe;
+  padding: 20px;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f7faff 100%);
   color: #223044;
   font: 16px/1.55 Arial, Helvetica, sans-serif;
+}
+
+.result-box h3 {
+  margin: 22px 0 8px;
+  color: #17202a;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.result-box h3:first-child {
+  margin-top: 0;
+}
+
+.result-box p {
+  margin: 8px 0;
+}
+
+.result-box .variant {
+  padding: 9px 11px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.result-box strong {
+  color: var(--accent-dark);
 }
 
 @media (max-width: 860px) {
