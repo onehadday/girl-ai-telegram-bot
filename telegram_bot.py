@@ -62,12 +62,7 @@ def split_message(text):
 
 
 def is_allowed(message):
-    allowed = os.getenv("TELEGRAM_ALLOWED_USER_ID", "").strip()
-    if not allowed:
-        return True
-
-    user = message.get("from", {})
-    return str(user.get("id", "")) == allowed
+    return True
 
 
 def make_payload(text):
@@ -156,9 +151,10 @@ def handle_message(token, message):
     if text.startswith("/mode"):
         settings = get_user_settings(message)
         value = text.replace("/mode", "", 1).strip().lower()
-        if value in ("bydlo", "бидло", "грубо"):
+        if value in ("bydlo", "бидло", "грубо", "rough"):
             settings["communicationMode"] = "Режим бидла: грубо, з матюками, але без принижень"
-            send_message(token, chat_id, "Увімкнув грубіший режим. Матюки можна, принижувати її - ні.")
+            settings["style"] = "дворовий стиль, коротко, грубіше, з легкою лайкою, без принижень"
+            send_message(token, chat_id, "Увімкнув режим бидла. Буде грубіше і з матюками, але без принижень і тиску.")
         else:
             settings["communicationMode"] = "Нормальний"
             send_message(token, chat_id, "Увімкнув нормальний режим.")

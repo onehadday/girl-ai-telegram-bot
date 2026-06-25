@@ -21,6 +21,7 @@ def load_env_file():
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
+            key = key.lstrip("\ufeff")
             os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
@@ -34,6 +35,17 @@ def build_prompt(data):
     communication_mode = data.get("communicationMode", "Нормальний")
     phrase_bank = data.get("phraseBank", "").strip()
     avoid_phrases = data.get("avoidPhrases", "").strip()
+    is_rough = "бидл" in communication_mode.lower() or "груб" in communication_mode.lower()
+    rough_rules = ""
+    if is_rough:
+        rough_rules = """
+Окремі правила для режиму "бидла":
+- Стиль має бути дворовий, прямий, трохи наглий, з легкою лайкою.
+- Можна використовувати слова типу: блін, капець, нафіг, охріненно, та ну, погнали.
+- Не перетворюй це на офіційний або надто чемний стиль.
+- Не ображай дівчину, не називай її принизливо, не тисни на неї.
+- Найкращий варіант і хоча б один додатковий варіант мають звучати реально грубіше, а не просто "впевнено".
+""".strip()
 
     return f"""
 Ти персональний помічник для переписки у знайомствах.
@@ -60,6 +72,7 @@ def build_prompt(data):
 Стиль користувача: {user_style or "простий, природний, без пафосу"}
 Фрази користувача, які можна вплітати: {phrase_bank or "немає"}
 Фрази-табу, яких треба уникати: {avoid_phrases or "немає"}
+{rough_rules}
 
 Переписка або опис ситуації:
 {context}

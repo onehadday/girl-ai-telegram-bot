@@ -3,100 +3,183 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ШІ для переписки</title>
+    <title>Girl AI - помічник для переписки</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app">
-      <section class="panel input-panel">
-        <div class="title-row">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AI</div>
           <div>
-            <p class="eyebrow">Помічник для знайомств</p>
+            <strong>Girl AI</strong>
+            <span>чат-помічник</span>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-btn active" data-view="chat">Чат</button>
+          <button class="nav-btn" data-view="situations">Ситуації</button>
+          <button class="nav-btn" data-view="settings">Налаштування</button>
+          <button class="nav-btn" data-view="profile">Кабінет</button>
+          <button class="nav-btn" data-view="billing">Тариф</button>
+          <button class="nav-btn" data-view="admin">Адмін</button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span>Telegram</span>
+          <a href="https://t.me/girl21ai_bot" target="_blank" rel="noreferrer">@girl21ai_bot</a>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Веб-версія Telegram-бота</p>
             <h1>Що їй написати?</h1>
           </div>
-          <span id="modeBadge" class="badge">готовий</span>
-        </div>
+          <div class="top-actions">
+            <span id="modeBadge" class="badge">готовий</span>
+            <button id="loginBtn" class="secondary">Увійти</button>
+          </div>
+        </header>
 
-        <label>
-          Ситуація
-          <select id="situation">
-            <option>Продовжити переписку</option>
-            <option>Переписка зайшла в глухий кут</option>
-            <option>Вона давно не відповідає</option>
-            <option>Запросити на зустріч</option>
-            <option>Відповісти на її повідомлення</option>
-            <option>Почати спілкування після знайомства</option>
-          </select>
-        </label>
+        <section id="view-chat" class="view active">
+          <div class="chat-layout">
+            <section class="panel chat-panel">
+              <div id="messages" class="messages">
+                <article class="message assistant">
+                  <span>AI</span>
+                  <p>Кидай переписку або опиши ситуацію. Я дам готове повідомлення, альтернативи й скажу, чого краще не писати.</p>
+                </article>
+              </div>
 
-        <div class="grid">
-          <label>
-            Тон
-            <select id="tone">
-              <option>спокійний, впевнений, живий</option>
-              <option>м'який і ненав'язливий</option>
-              <option>легкий флірт</option>
-              <option>з гумором</option>
-              <option>коротко і прямо</option>
-            </select>
-          </label>
+              <div class="composer">
+                <textarea id="context" placeholder="Наприклад: вона відповіла 'дякую', хочу відповісти не сухо і не нав'язливо"></textarea>
+                <button id="generateBtn">Підібрати відповідь</button>
+              </div>
+            </section>
 
-          <label>
-            Мова
-            <select id="language">
-              <option>Українська</option>
-              <option>Російська</option>
-              <option>English</option>
-            </select>
-          </label>
-        </div>
+            <aside class="panel control-panel">
+              <label>
+                Ситуація
+                <select id="situation">
+                  <option>Продовжити переписку</option>
+                  <option>Переписка зайшла в глухий кут</option>
+                  <option>Вона давно не відповідає</option>
+                  <option>Запросити на зустріч</option>
+                  <option>Відповісти на її повідомлення</option>
+                  <option>Почати спілкування після знайомства</option>
+                </select>
+              </label>
 
-        <label>
-          Твоя ціль
-          <input id="goal" value="підтримати нормальне спілкування" />
-        </label>
+              <label>
+                Режим
+                <select id="communicationMode">
+                  <option>Нормальний</option>
+                  <option>Флірт</option>
+                  <option>Спокійний джентльмен</option>
+                  <option>Режим бидла: грубо, з матюками, але без принижень</option>
+                </select>
+              </label>
 
-        <label>
-          Як ти зазвичай пишеш
-          <input id="style" placeholder="Наприклад: коротко, без пафосу, можна трохи жартувати" />
-        </label>
+              <label>
+                Тон
+                <select id="tone">
+                  <option>спокійний, впевнений, живий</option>
+                  <option>м'який і ненав'язливий</option>
+                  <option>легкий флірт</option>
+                  <option>з гумором</option>
+                  <option>коротко і прямо</option>
+                </select>
+              </label>
 
-        <label>
-          Режим спілкування
-          <select id="communicationMode">
-            <option>Нормальний</option>
-            <option>Флірт</option>
-            <option>Спокійний джентльмен</option>
-            <option>Режим бидла: грубо, з матюками, але без принижень</option>
-          </select>
-        </label>
+              <label>
+                Мова
+                <select id="language">
+                  <option>Українська</option>
+                  <option>Російська</option>
+                  <option>English</option>
+                </select>
+              </label>
 
-        <label>
-          Твої фрази
-          <textarea id="phraseBank" class="small-textarea" placeholder="Наприклад: та ну нафіг; погнали на каву; не душню"></textarea>
-        </label>
+              <label>
+                Ціль
+                <input id="goal" value="підтримати нормальне спілкування" />
+              </label>
+            </aside>
+          </div>
+        </section>
 
-        <label>
-          Що не писати
-          <textarea id="avoidPhrases" class="small-textarea" placeholder="Наприклад: сонечко; красуня; чого мовчиш"></textarea>
-        </label>
+        <section id="view-situations" class="view">
+          <div class="section-head">
+            <h2>Сценарії з бота</h2>
+            <p>Кнопки Telegram-бота перенесені в картки. Натисни сценарій, і він підставиться в чат.</p>
+          </div>
+          <div class="cards">
+            <button class="scenario-card" data-situation="Вона давно не відповідає" data-goal="м'яко відновити розмову">Вона мовчить</button>
+            <button class="scenario-card" data-situation="Запросити на зустріч" data-goal="запросити без тиску">Запросити на каву</button>
+            <button class="scenario-card" data-situation="Відповісти на її повідомлення" data-goal="відповісти живо">Відповісти не сухо</button>
+            <button class="scenario-card" data-situation="Почати спілкування після знайомства" data-goal="почати розмову природно">Почати діалог</button>
+          </div>
+        </section>
 
-        <label>
-          Встав переписку або коротко опиши ситуацію
-          <textarea id="context" placeholder="Приклад: Я написав..., вона відповіла..., потім тиша 2 дні. Хочу написати без нав'язливості."></textarea>
-        </label>
+        <section id="view-settings" class="view">
+          <div class="section-head">
+            <h2>Налаштування спілкування</h2>
+            <p>Це веб-версія команд /mode, /style, /phrases, /avoid.</p>
+          </div>
+          <div class="settings-grid">
+            <label class="panel">
+              Як ти зазвичай пишеш
+              <textarea id="style" class="small-textarea" placeholder="коротко, без пафосу, трохи нагло">коротко, без пафосу, можна трохи жартувати</textarea>
+            </label>
+            <label class="panel">
+              Твої фрази
+              <textarea id="phraseBank" class="small-textarea" placeholder="та ну нафіг; погнали на каву; не душню"></textarea>
+            </label>
+            <label class="panel">
+              Що не писати
+              <textarea id="avoidPhrases" class="small-textarea" placeholder="сонечко; красуня; чого мовчиш"></textarea>
+            </label>
+          </div>
+        </section>
 
-        <button id="generateBtn">Підібрати відповідь</button>
-      </section>
+        <section id="view-profile" class="view">
+          <div class="section-head">
+            <h2>Особистий кабінет</h2>
+            <p>У поточному боті немає бази користувачів, тому кабінет зберігається в цьому браузері.</p>
+          </div>
+          <div class="panel profile-card">
+            <label>Ім'я <input id="profileName" placeholder="Наприклад: Саня" /></label>
+            <label>Про себе <textarea id="profileAbout" class="small-textarea" placeholder="Що враховувати в стилі спілкування"></textarea></label>
+            <button id="saveProfileBtn">Зберегти кабінет</button>
+          </div>
+        </section>
 
-      <section class="panel output-panel">
-        <div class="output-header">
-          <h2>Варіанти</h2>
-          <button id="copyBtn" class="secondary">Копіювати</button>
-        </div>
-        <div id="result" class="result-box">Встав переписку зліва і натисни кнопку. Я дам готове повідомлення, кілька альтернатив і скажу, чого краще уникати.</div>
-      </section>
-    </main>
+        <section id="view-billing" class="view">
+          <div class="section-head">
+            <h2>Тариф</h2>
+            <p>Оплати в Telegram-боті зараз немає, тому тут показаний стан сервісу без фейкових платежів.</p>
+          </div>
+          <div class="panel tariff">
+            <span>Free</span>
+            <h3>Безкоштовний режим</h3>
+            <p>Працює через безкоштовні API-ліміти. Якщо модель перевантажена, бот дає локальну підказку.</p>
+          </div>
+        </section>
+
+        <section id="view-admin" class="view">
+          <div class="section-head">
+            <h2>Адмін-панель</h2>
+            <p>У боті немає адмін-команд. Це місце залишено під майбутні логи, користувачів і налаштування.</p>
+          </div>
+          <div class="panel todo-panel">
+            TODO: підключити реальну базу даних, список користувачів і статистику запитів.
+          </div>
+        </section>
+      </main>
+    </div>
 
     <script src="app.js"></script>
   </body>

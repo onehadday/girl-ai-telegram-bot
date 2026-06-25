@@ -34,7 +34,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self.send_text(200, "Bot is alive.")
             return
-        if self.path == "/":
+        if self.path == "/" or self.path in ("/chat", "/settings", "/profile"):
             self.send_static("index.html")
             return
         if self.path in ("/app.js", "/styles.css"):
