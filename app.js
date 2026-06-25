@@ -4,6 +4,9 @@ const fields = {
   language: document.querySelector("#language"),
   goal: document.querySelector("#goal"),
   style: document.querySelector("#style"),
+  communicationMode: document.querySelector("#communicationMode"),
+  phraseBank: document.querySelector("#phraseBank"),
+  avoidPhrases: document.querySelector("#avoidPhrases"),
   context: document.querySelector("#context"),
 };
 

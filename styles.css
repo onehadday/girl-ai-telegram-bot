@@ -105,6 +105,10 @@ textarea {
   line-height: 1.45;
 }
 
+.small-textarea {
+  min-height: 82px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -31,6 +31,9 @@ def build_prompt(data):
     goal = data.get("goal", "підтримати нормальне спілкування")
     context = data.get("context", "").strip()
     user_style = data.get("style", "").strip()
+    communication_mode = data.get("communicationMode", "Нормальний")
+    phrase_bank = data.get("phraseBank", "").strip()
+    avoid_phrases = data.get("avoidPhrases", "").strip()
 
     return f"""
 Ти персональний помічник для переписки у знайомствах.
@@ -43,12 +46,18 @@ def build_prompt(data):
 - Пиши живо, без канцеляриту і без шаблонного пікапу.
 - Відповіді мають звучати як реальна людина, а не як робот.
 - Якщо в переписці є явний холод або відмова, поважай це.
+- Якщо обрано грубий режим, можна писати простіше, різкіше і з легкою лайкою, але не ображай дівчину, не принижуй її і не тисни.
+- Використовуй фрази користувача тільки там, де вони звучать природно.
+- Не використовуй фрази-табу.
 
 Мова відповіді: {language}
 Ситуація: {situation}
 Бажаний тон: {tone}
 Ціль: {goal}
+Режим спілкування: {communication_mode}
 Стиль користувача: {user_style or "простий, природний, без пафосу"}
+Фрази користувача, які можна вплітати: {phrase_bank or "немає"}
+Фрази-табу, яких треба уникати: {avoid_phrases or "немає"}
 
 Переписка або опис ситуації:
 {context}
@@ -64,7 +73,10 @@ def build_prompt(data):
 def fallback_reply(data):
     situation = data.get("situation", "")
     language = data.get("language", "Українська")
+    communication_mode = data.get("communicationMode", "Нормальний")
+    phrase_bank = data.get("phraseBank", "").strip()
     is_ua = "english" not in language.lower()
+    is_rough = "бидл" in communication_mode.lower() or "груб" in communication_mode.lower()
 
     if is_ua:
         opener = "Мені здається, тут краще написати легко і без тиску."
@@ -74,6 +86,16 @@ def fallback_reply(data):
             best = "Мені з тобою цікаво спілкуватись. Може, вип'ємо кави цього тижня і продовжимо вже наживо?"
         else:
             best = "Ахах, звучить цікаво. А як ти взагалі до цього прийшла?"
+        if is_rough:
+            opener = "Ок, даю грубіший варіант, але без наїзду."
+            if "глухий" in situation.lower() or "мовч" in situation.lower():
+                best = "Та блін, згадав нашу розмову. Як у тебе там життя, який план на тиждень?"
+            elif "запрос" in situation.lower() or "зустр" in situation.lower():
+                best = "Слухай, досить оце тільки переписуватись. Погнали на каву цього тижня?"
+            else:
+                best = "Ахах, ну це вже цікаво. Давай повну версію, бо я тепер не відчеплюсь."
+        if phrase_bank:
+            best = f"{best}\n\nМожна з твоєю фразою: {phrase_bank.splitlines()[0][:120]}"
         return f"""{opener}
 
 1. Найкращий варіант:

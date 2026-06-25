@@ -10,6 +10,7 @@ from server import load_env_file, suggest
 
 API_BASE = "https://api.telegram.org/bot{token}/{method}"
 MAX_TELEGRAM_MESSAGE = 3900
+USER_SETTINGS = {}
 
 
 def telegram_request(token, method, payload=None):
@@ -84,14 +85,38 @@ def make_payload(text):
         situation = "Почати спілкування після знайомства"
         goal = "почати розмову природно"
 
+    settings = USER_SETTINGS.get("default", {})
     return {
         "situation": situation,
         "tone": "спокійний, впевнений, живий",
         "language": "Українська",
         "goal": goal,
-        "style": "коротко, без пафосу, можна трохи жартувати",
+        "style": settings.get("style", "коротко, без пафосу, можна трохи жартувати"),
+        "communicationMode": settings.get("communicationMode", "Нормальний"),
+        "phraseBank": settings.get("phraseBank", ""),
+        "avoidPhrases": settings.get("avoidPhrases", ""),
         "context": text,
     }
+
+
+def get_user_settings(message):
+    user_id = str(message.get("from", {}).get("id", "default"))
+    return USER_SETTINGS.setdefault(
+        user_id,
+        {
+            "communicationMode": "Нормальний",
+            "style": "коротко, без пафосу, можна трохи жартувати",
+            "phraseBank": "",
+            "avoidPhrases": "",
+        },
+    )
+
+
+def make_payload_for_user(text, message):
+    payload = make_payload(text)
+    settings = get_user_settings(message)
+    payload.update(settings)
+    return payload
 
 
 def handle_message(token, message):
@@ -112,7 +137,14 @@ def handle_message(token, message):
             "Привіт. Кидай сюди переписку або коротко опиши ситуацію, а я дам варіанти що відповісти.\n\n"
             "Приклад:\n"
             "Вона 2 дні не відповідає. До цього писала, що любить каву. Хочу написати без нав'язливості.\n\n"
-            "Команда /id покаже твій Telegram ID, щоб за бажанням закрити бота тільки для тебе.",
+            "Команди:\n"
+            "/mode normal - нормальний режим\n"
+            "/mode bydlo - грубіше, з матюками, але без принижень\n"
+            "/style коротко, без пафосу - задати стиль\n"
+            "/phrases твоя фраза; ще фраза - додати твої фрази\n"
+            "/avoid фраза; інша фраза - що не використовувати\n"
+            "/settings - показати налаштування\n"
+            "/id - показати твій Telegram ID",
         )
         return
 
@@ -121,12 +153,54 @@ def handle_message(token, message):
         send_message(token, chat_id, f"Твій Telegram ID: {user_id}")
         return
 
+    if text.startswith("/mode"):
+        settings = get_user_settings(message)
+        value = text.replace("/mode", "", 1).strip().lower()
+        if value in ("bydlo", "бидло", "грубо"):
+            settings["communicationMode"] = "Режим бидла: грубо, з матюками, але без принижень"
+            send_message(token, chat_id, "Увімкнув грубіший режим. Матюки можна, принижувати її - ні.")
+        else:
+            settings["communicationMode"] = "Нормальний"
+            send_message(token, chat_id, "Увімкнув нормальний режим.")
+        return
+
+    if text.startswith("/phrases"):
+        settings = get_user_settings(message)
+        settings["phraseBank"] = text.replace("/phrases", "", 1).strip()
+        send_message(token, chat_id, "Зберіг твої фрази для цього запуску бота.")
+        return
+
+    if text.startswith("/style"):
+        settings = get_user_settings(message)
+        settings["style"] = text.replace("/style", "", 1).strip() or "коротко, без пафосу"
+        send_message(token, chat_id, "Ок, стиль оновив.")
+        return
+
+    if text.startswith("/avoid"):
+        settings = get_user_settings(message)
+        settings["avoidPhrases"] = text.replace("/avoid", "", 1).strip()
+        send_message(token, chat_id, "Ок, ці фрази буду обходити.")
+        return
+
+    if text == "/settings":
+        settings = get_user_settings(message)
+        send_message(
+            token,
+            chat_id,
+            "Поточні налаштування:\n"
+            f"Режим: {settings.get('communicationMode')}\n"
+            f"Стиль: {settings.get('style')}\n"
+            f"Твої фрази: {settings.get('phraseBank') or 'немає'}\n"
+            f"Не писати: {settings.get('avoidPhrases') or 'немає'}",
+        )
+        return
+
     if not text:
         send_message(token, chat_id, "Надішли текст переписки або короткий опис ситуації.")
         return
 
     send_message(token, chat_id, "Думаю, що можна відповісти...")
-    result = suggest(make_payload(text))
+    result = suggest(make_payload_for_user(text, message))
     send_message(token, chat_id, result.get("text", "Не вдалося підготувати відповідь."))
 
 

@@ -1,9 +1,10 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import mimetypes
 import os
 import urllib.error
 
-from server import load_env_file
+from server import load_env_file, suggest
 from telegram_bot import handle_message, telegram_request
 
 
@@ -30,12 +31,22 @@ def set_webhook_if_configured():
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ("/", "/health"):
+        if self.path == "/health":
             self.send_text(200, "Bot is alive.")
+            return
+        if self.path == "/":
+            self.send_static("index.html")
+            return
+        if self.path in ("/app.js", "/styles.css"):
+            self.send_static(self.path.lstrip("/"))
             return
         self.send_text(404, "Not found.")
 
     def do_POST(self):
+        if self.path == "/api/suggest":
+            self.handle_suggest()
+            return
+
         secret = env("TELEGRAM_WEBHOOK_SECRET")
         expected_path = f"/telegram/{secret}"
         if not secret or self.path != expected_path:
@@ -55,6 +66,14 @@ class WebhookHandler(BaseHTTPRequestHandler):
             print(f"Webhook error: {error}")
             self.send_json(200, {"ok": False})
 
+    def handle_suggest(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+            self.send_json(200, suggest(data))
+        except Exception as error:
+            self.send_json(500, {"error": str(error)})
+
     def log_message(self, format, *args):
         return
 
@@ -62,6 +81,27 @@ class WebhookHandler(BaseHTTPRequestHandler):
         body = text.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_static(self, path):
+        if not os.path.exists(path):
+            self.send_text(404, "Not found.")
+            return
+
+        with open(path, "rb") as file:
+            body = file.read()
+        content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        if path.endswith(".html"):
+            content_type = "text/html; charset=utf-8"
+        elif path.endswith(".js"):
+            content_type = "text/javascript; charset=utf-8"
+        elif path.endswith(".css"):
+            content_type = "text/css; charset=utf-8"
+
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
