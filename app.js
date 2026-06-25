@@ -230,24 +230,43 @@ function extractSection(text, startWords, endWords = []) {
   return match ? match[1].trim() : "";
 }
 
+function stripAnalysisBlock(text) {
+  return cleanMarkdown(text)
+    .replace(/(?:^|\n)\s*(AI-аналіз|Розбір тону)\s*:?\s*[\s\S]*?(?=\n\s*(Найкращий варіант|Best message)\s*:|\n\s*1\.\s*(Найкращий варіант|Best message)\s*:|$)/i, "\n")
+    .trim();
+}
+
 function extractVariants(text) {
-  const cleaned = cleanMarkdown(text);
+  const cleaned = stripAnalysisBlock(text);
   const lines = cleaned.split("\n").map((line) => line.trim()).filter(Boolean);
   const sections = {};
   let currentKey = "";
 
   for (const line of lines) {
+    const inlineLabel = line.match(/^(Найкращий варіант|Best message|М['’]?якше|Softer|Сміливіше|Bolder|З гумором|Funny)\s*:\s*(.+)$/i);
+    if (inlineLabel) {
+      const label = inlineLabel[1].toLowerCase().replace(/[’']/g, "");
+      const key =
+        label.includes("найкращий") || label.includes("best") ? "best" :
+        label.includes("мякше") || label.includes("softer") ? "soft" :
+        label.includes("сміливіше") || label.includes("bolder") ? "bold" :
+        "funny";
+      sections[key] = [sections[key], inlineLabel[2].trim()].filter(Boolean).join(" ");
+      currentKey = "";
+      continue;
+    }
+
     const normalized = line
       .toLowerCase()
       .replace(/[’']/g, "")
       .replace(/[:№\d.\s]+$/g, "")
       .trim();
     const directKey =
-      normalized.includes("найкращий варіант") || normalized.includes("best message") ? "best" :
-      normalized === "мякше" || normalized.includes("softer") ? "soft" :
-      normalized === "сміливіше" || normalized.includes("bolder") ? "bold" :
-      normalized === "з гумором" || normalized.includes("funny") ? "funny" :
-      normalized.includes("ще варіанти") || normalized.includes("чому це працює") || normalized.includes("що не варто") || normalized.includes("попередження") ? "stop" :
+      normalized === "найкращий варіант" || normalized === "best message" ? "best" :
+      normalized === "мякше" || normalized === "softer" ? "soft" :
+      normalized === "сміливіше" || normalized === "bolder" ? "bold" :
+      normalized === "з гумором" || normalized === "funny" ? "funny" :
+      normalized === "ще варіанти" || normalized === "чому це працює" || normalized === "що не варто писати" || normalized === "попередження" ? "stop" :
       "";
 
     if (directKey) {
@@ -266,7 +285,7 @@ function extractVariants(text) {
   const pick = (labels, stops) => {
     const labelPattern = labels.join("|");
     const stopPattern = stops.join("|");
-    const regex = new RegExp(`(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=(?:\\n|\\s)+(?:${stopPattern})\\s*:?|$)`, "i");
+    const regex = new RegExp(`(?:^|\\n)\\s*(?:\\d+\\.\\s*)?(?:${labelPattern})\\s*:?\\s*([\\s\\S]*?)(?=\\n\\s*(?:\\d+\\.\\s*)?(?:${stopPattern})\\s*:?|$)`, "i");
     const match = cleaned.match(regex);
     return match ? cleanMarkdown(match[1]).replace(/^[:\s]+/, "").trim() : "";
   };
@@ -423,9 +442,45 @@ function collapsible(title, preview, bodyHtml) {
   `;
 }
 
+function isModelFailureText(text) {
+  const compact = cleanMarkdown(text).toLowerCase();
+  return !compact
+    || compact.includes("не вдалося прочитати відповідь")
+    || compact.includes("не вдалося прочитати відповідь gemini")
+    || compact.includes("не вдалося прочитати відповідь openrouter")
+    || compact.includes("не вдалося прочитати відповідь моделі");
+}
+
+function renderAssistantError(text) {
+  const article = document.createElement("article");
+  article.className = "message assistant error-message";
+  article.innerHTML = `
+    <span class="message-avatar">G</span>
+    <div class="message-content">
+      <strong class="message-author">Помічник</strong>
+      <div class="error-card">
+        <h3>Не вийшло отримати нормальну відповідь</h3>
+        <p>${escapeHtml(cleanMarkdown(text) || "Модель повернула порожню відповідь.")}</p>
+        <p>Спробуй ще раз. Якщо Gemini тимчасово тупанув, сайт попросить іншу модель або дасть локальну підказку.</p>
+        <button class="regenerate-answer" type="button">🎲 Спробувати ще раз</button>
+      </div>
+    </div>
+  `;
+  messages.appendChild(article);
+  messages.scrollTop = messages.scrollHeight;
+}
+
 function renderAssistantResult(text, payload) {
   const cleaned = cleanMarkdown(text);
+  if (isModelFailureText(cleaned)) {
+    renderAssistantError(cleaned);
+    return;
+  }
   const variants = extractVariants(cleaned);
+  if (!variants.length) {
+    renderAssistantError("Модель відповіла у форматі, який сайт не зміг розібрати на картки.");
+    return;
+  }
   const analysis = parseModelAnalysis(cleaned) || analyzePayload(payload || lastPayload || {}, cleaned);
   const redFlags = buildRedFlags(payload || lastPayload || {});
   const coach = buildCoach(payload || lastPayload || {}, cleaned);
