@@ -47,6 +47,7 @@ let currentUser = null;
 let selectedAdminUser = null;
 let lastPayload = null;
 let lastResponseText = "";
+let regenerateCounter = 0;
 
 function cleanMarkdown(text) {
   return String(text || "")
@@ -167,6 +168,7 @@ function collectPayload(extraInstruction = "") {
 
   payload.context = [payload.context, additions.join("\n")].filter(Boolean).join("\n\n");
   payload.selectedProfile = profileText;
+  payload.variantSeed = regenerateCounter;
   return payload;
 }
 
@@ -922,7 +924,10 @@ document.querySelectorAll(".scenario-card").forEach((card) => {
   });
 });
 
-generateBtn.addEventListener("click", () => runSuggestion());
+generateBtn.addEventListener("click", () => {
+  regenerateCounter = 0;
+  runSuggestion();
+});
 
 messages.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
@@ -948,7 +953,8 @@ messages.addEventListener("click", async (event) => {
   }
 
   if (button.classList.contains("regenerate-answer")) {
-    await runSuggestion("Дай інші варіанти відповіді. Не повторюй попередні формулювання.");
+    regenerateCounter += 1;
+    await runSuggestion(`Дай повністю інші варіанти відповіді. Не повторюй попередні формулювання, структуру і ключові слова. Це повторна генерація номер ${regenerateCounter}.`);
   }
 
   if (button.classList.contains("rate-answer")) {
@@ -960,7 +966,8 @@ messages.addEventListener("click", async (event) => {
   }
 
   if (button.classList.contains("retry-different")) {
-    await runSuggestion("Попередній стиль не підійшов. Дай відповідь в іншому стилі: простіше, природніше і без зайвого тексту.");
+    regenerateCounter += 1;
+    await runSuggestion(`Попередній стиль не підійшов. Дай відповідь в іншому стилі: простіше, природніше і без зайвого тексту. Це повторна генерація номер ${regenerateCounter}.`);
   }
 });
 
