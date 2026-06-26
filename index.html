@@ -24,7 +24,7 @@
           <button class="nav-btn" data-view="favorites"><span>❤️</span> Обране</button>
           <button class="nav-btn" data-view="settings"><span>🎨</span> Стиль</button>
           <button class="nav-btn" data-view="profile"><span>⚙</span> Кабінет</button>
-          <button class="nav-btn" data-view="billing"><span>💎</span> Тариф</button>
+          <button class="nav-btn hidden" data-view="billing" data-future-feature="billing"><span>💎</span> Тариф</button>
           <button class="nav-btn" data-view="admin" data-admin-only="true"><span>🕒</span> Історія</button>
         </nav>
 
@@ -41,9 +41,10 @@
             <h1>Що їй написати?</h1>
           </div>
           <div class="top-actions">
-            <span id="authStatus" class="auth-status">гість</span>
+            <span id="authStatus" class="auth-status">Гостьовий режим</span>
             <span id="modeBadge" class="badge">готовий</span>
             <button id="loginBtn" class="secondary">Увійти</button>
+            <button id="registerTopBtn" class="secondary">Створити акаунт</button>
             <button id="logoutBtn" class="secondary hidden">Вийти</button>
           </div>
         </header>
@@ -59,9 +60,9 @@
                 <button class="secondary" data-view-button="settings" type="button">Налаштувати стиль</button>
               </div>
               <div class="landing-stats">
-                <div><strong>⭐⭐⭐⭐⭐</strong><span>формат особистого тренера</span></div>
-                <div><strong>12000+</strong><span>відповідей можна згенерувати</span></div>
-                <div><strong>95%</strong><span>фокус на природний тон</span></div>
+                <div><strong>AI-аналіз</strong><span>тон, флірт і момент для відповіді</span></div>
+                <div><strong>4 варіанти</strong><span>м'якше, сміливіше, з гумором</span></div>
+                <div><strong>Твій стиль</strong><span>фрази, обране і профілі в акаунті</span></div>
               </div>
             </div>
             <div class="landing-preview panel">
@@ -204,8 +205,8 @@
 
         <section id="view-situations" class="view">
           <div class="section-head">
-            <h2>Сценарії з бота</h2>
-            <p>Кнопки Telegram-бота перенесені в картки. Натисни сценарій, і він підставиться в чат.</p>
+            <h2>Готові ситуації</h2>
+            <p>Обери потрібну ситуацію, і сайт підставить її в чат для швидкого старту.</p>
           </div>
           <div class="cards">
             <button class="scenario-card" data-situation="Вона давно не відповідає" data-goal="м'яко відновити розмову">Вона мовчить</button>
@@ -218,7 +219,7 @@
         <section id="view-settings" class="view">
           <div class="section-head">
             <h2>Налаштування спілкування</h2>
-            <p>Це веб-версія команд /mode, /style, /phrases, /avoid. Налаштування зберігаються окремо для кожного акаунта.</p>
+            <p>Налаштуй стиль, щоб відповіді звучали природно саме для тебе.</p>
           </div>
           <div class="settings-grid">
             <div class="panel style-memory">
@@ -248,7 +249,7 @@
         <section id="view-profile" class="view">
           <div class="section-head">
             <h2>Особистий кабінет</h2>
-            <p>Реєстрація потрібна, щоб адмін бачив історію сайту по користувачах, а ти міг зберігати стиль.</p>
+            <p>Створи акаунт, щоб зберігати профілі співрозмовниць, обране, персональний стиль та історію своїх запитів.</p>
           </div>
           <div class="auth-grid">
             <form id="registerForm" class="panel auth-card">
@@ -287,6 +288,12 @@
             </label>
             <button type="submit">Змінити пароль</button>
           </form>
+
+          <div class="panel tariff">
+            <span>Стан сервісу</span>
+            <h3>Безкоштовний режим</h3>
+            <p>Оплата зараз не підключена. Сайт працює через безкоштовні API-ліміти; якщо модель тимчасово недоступна, з'являється локальна підказка.</p>
+          </div>
         </section>
 
         <section id="view-billing" class="view">
@@ -342,6 +349,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=errorfix-20260626"></script>
+    <script src="app.js?v=stability-audit-20260626"></script>
   </body>
 </html>

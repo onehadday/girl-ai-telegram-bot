@@ -57,7 +57,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if path == "/api/admin/users":
             self.handle_users()
             return
-        if path == "/" or path in ("/chat", "/settings", "/profile"):
+        if path == "/" or path in ("/chat", "/settings", "/profile", "/admin"):
             self.send_static("index.html")
             return
         if path in ("/app.js", "/styles.css"):

@@ -14,6 +14,7 @@ const fields = {
 const messages = document.querySelector("#messages");
 const generateBtn = document.querySelector("#generateBtn");
 const loginBtn = document.querySelector("#loginBtn");
+const registerTopBtn = document.querySelector("#registerTopBtn");
 const logoutBtn = document.querySelector("#logoutBtn");
 const saveProfileBtn = document.querySelector("#saveProfileBtn");
 const modeBadge = document.querySelector("#modeBadge");
@@ -614,6 +615,7 @@ function clearSessionUi() {
   selectedAdminUser = null;
   lastPayload = null;
   lastResponseText = "";
+  regenerateCounter = 0;
   sessionStorage.clear();
   messages.innerHTML = `
     <article class="message assistant">
@@ -629,6 +631,8 @@ function clearSessionUi() {
   peopleList.textContent = "Профілі з'являться тут.";
   favoritesList.textContent = "Обрані відповіді з'являться тут.";
   fields.personProfile.innerHTML = '<option value="">Без профілю</option>';
+  personForm.reset();
+  setFormStatus(personStatusText, "", "info");
 }
 
 function clearAuthForms() {
@@ -639,22 +643,31 @@ function clearAuthForms() {
 }
 
 function updateAuthUi(user) {
+  const previousUserId = currentUser && currentUser.id ? String(currentUser.id) : "";
+  const nextUserId = user && user.id ? String(user.id) : "";
+  if (previousUserId && previousUserId !== nextUserId) {
+    clearSessionUi();
+  }
   currentUser = user;
   document.querySelectorAll("[data-admin-only='true']").forEach((item) => {
     item.classList.toggle("hidden", !user || !user.is_admin);
   });
 
   if (user) {
-    authStatus.textContent = user.is_admin ? `${user.name} · адмін` : user.name;
+    authStatus.textContent = user.is_admin
+      ? `${user.name || user.email} · адмін`
+      : (user.name || user.email);
     loginBtn.classList.add("hidden");
+    registerTopBtn.classList.add("hidden");
     logoutBtn.classList.remove("hidden");
     loadLocalSettings();
     renderPeople();
     renderProfileSelect();
     renderFavorites();
   } else {
-    authStatus.textContent = "гість";
+    authStatus.textContent = "Гостьовий режим";
     loginBtn.classList.remove("hidden");
+    registerTopBtn.classList.remove("hidden");
     logoutBtn.classList.add("hidden");
     if (document.querySelector("#view-admin").classList.contains("active")) showView("chat");
   }
@@ -671,6 +684,7 @@ async function refreshMe() {
 
 function showView(name) {
   if (name === "admin" && (!currentUser || !currentUser.is_admin)) name = "chat";
+  if (name === "billing") name = "profile";
   document.querySelectorAll(".nav-btn").forEach((item) => {
     item.classList.toggle("active", item.dataset.view === name);
   });
@@ -915,6 +929,11 @@ document.querySelectorAll(".start-chat-btn, [data-view-button]").forEach((button
   });
 });
 
+function openRegister() {
+  showView("profile");
+  document.querySelector("#registerEmail").focus();
+}
+
 document.querySelectorAll(".scenario-card").forEach((card) => {
   card.addEventListener("click", () => {
     fields.situation.value = card.dataset.situation;
@@ -1124,6 +1143,7 @@ adminPasswordForm.addEventListener("submit", async (event) => {
 });
 
 loginBtn.addEventListener("click", () => showView("profile"));
+registerTopBtn.addEventListener("click", openRegister);
 refreshUsersBtn.addEventListener("click", loadAdminUsers);
 toggleNewPasswordBtn.addEventListener("click", () => togglePassword("#newPassword", toggleNewPasswordBtn));
 toggleAdminPasswordBtn.addEventListener("click", () => togglePassword("#adminNewPassword", toggleAdminPasswordBtn));
@@ -1138,5 +1158,17 @@ saveProfileBtn.addEventListener("click", () => {
   showView("chat");
 });
 
-clearSessionUi();
-refreshMe();
+async function initApp() {
+  clearSessionUi();
+  await refreshMe();
+  if (window.location.pathname === "/admin") {
+    showView(currentUser && currentUser.is_admin ? "admin" : "chat");
+    if (currentUser && currentUser.is_admin) loadAdminUsers();
+    return;
+  }
+  if (!currentUser) {
+    showView("profile");
+  }
+}
+
+initApp();

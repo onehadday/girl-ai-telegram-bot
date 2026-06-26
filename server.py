@@ -538,6 +538,9 @@ def summarize_api_errors(errors):
 class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
+        if path == "/admin":
+            self.serve_index()
+            return
         if path == "/api/me":
             self.handle_me()
             return
@@ -548,6 +551,18 @@ class Handler(SimpleHTTPRequestHandler):
             self.handle_users()
             return
         super().do_GET()
+
+    def serve_index(self):
+        try:
+            with open("index.html", "rb") as file:
+                body = file.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError:
+            self.send_error(404)
 
     def do_POST(self):
         if self.path == "/api/register":
