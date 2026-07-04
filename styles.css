@@ -476,6 +476,80 @@ h3 {
   min-height: 82px;
 }
 
+.conversation-tools {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.conversation-tools select {
+  margin-top: 0;
+}
+
+.upload-button {
+  margin: 0;
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: #f5eee7;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+}
+
+.upload-button:hover {
+  background: #eadfd4;
+}
+
+.upload-button input {
+  display: none;
+}
+
+.composer-status,
+.conversation-history {
+  grid-column: 1 / -1;
+}
+
+.composer-status {
+  min-height: 20px;
+  margin: -4px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.conversation-history {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.conversation-history summary {
+  cursor: pointer;
+  font-weight: 850;
+}
+
+#conversationHistory {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.conversation-line {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8f4ef;
+  line-height: 1.45;
+}
+
+.conversation-line strong {
+  color: var(--accent);
+}
+
 .control-panel {
   padding: 20px;
   align-self: start;
@@ -1026,6 +1100,10 @@ textarea {
 
   .top-actions {
     justify-content: flex-start;
+  }
+
+  .conversation-tools {
+    grid-template-columns: 1fr;
   }
 
   .nav,

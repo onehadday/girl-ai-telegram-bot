@@ -5,15 +5,24 @@ import os
 import urllib.parse
 import urllib.error
 
-from server import load_env_file, suggest
+from server import (
+    add_history_to_prompt,
+    analyze_screenshot,
+    conversation_owner_for_user,
+    load_env_file,
+    suggest,
+)
 from storage import (
     authenticate_user,
     change_user_password,
+    clear_conversation_messages,
     create_session,
     create_user,
     delete_session,
     get_user_by_session,
     init_db,
+    list_conversations,
+    list_conversation_messages,
     list_people,
     list_interactions,
     log_interaction,
@@ -57,6 +66,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if path == "/api/admin/users":
             self.handle_users()
             return
+        if path == "/api/conversation":
+            self.handle_conversation()
+            return
+        if path == "/api/conversations":
+            self.handle_conversations()
+            return
         if path == "/" or path in ("/chat", "/settings", "/profile", "/admin"):
             self.send_static("index.html")
             return
@@ -80,6 +95,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/admin/reset-password":
             self.handle_reset_password()
+            return
+        if self.path == "/api/analyze-screenshot":
+            self.handle_screenshot()
+            return
+        if self.path == "/api/conversation/clear":
+            self.handle_clear_conversation()
             return
         if self.path == "/api/suggest":
             self.handle_suggest()
@@ -112,10 +133,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.send_json(401, {"error": "Спочатку зареєструйся або увійди в акаунт."})
                 return
             data = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = suggest(data)
+            enriched_data = add_history_to_prompt(data, user)
+            result = suggest(enriched_data)
             log_interaction(
                 "site",
-                data.get("context", ""),
+                enriched_data.get("context", ""),
                 result.get("text", ""),
                 result.get("mode", ""),
                 user=user,
@@ -124,6 +146,64 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_json(200, result)
         except Exception as error:
             self.send_json(500, {"error": str(error)})
+
+    def handle_screenshot(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        try:
+            data = self.read_json(max_bytes=10 * 1024 * 1024)
+            image = str(data.get("image", ""))
+            if "," in image and image.startswith("data:"):
+                image = image.split(",", 1)[1]
+            self.send_json(
+                200,
+                analyze_screenshot(image, data.get("mime_type", "image/jpeg")),
+            )
+        except (ValueError, RuntimeError) as error:
+            self.send_json(400, {"error": str(error)})
+        except Exception:
+            self.send_json(500, {"error": "Не вдалося розпізнати скріншот. Спробуй інше зображення."})
+
+    def handle_conversation(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        conversation_key = query.get("conversation_key", [""])[0].strip()
+        if not conversation_key:
+            self.send_json(400, {"error": "Обери профіль співрозмовниці."})
+            return
+        items = list_conversation_messages(
+            conversation_owner_for_user(user),
+            conversation_key,
+            limit=60,
+        )
+        self.send_json(200, {"items": items})
+
+    def handle_conversations(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        self.send_json(
+            200,
+            {"items": list_conversations(conversation_owner_for_user(user))},
+        )
+
+    def handle_clear_conversation(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        conversation_key = str(self.read_json().get("conversation_key", "")).strip()
+        if not conversation_key:
+            self.send_json(400, {"error": "Обери профіль співрозмовниці."})
+            return
+        clear_conversation_messages(conversation_owner_for_user(user), conversation_key)
+        self.send_json(200, {"ok": True})
 
     def handle_register(self):
         data = self.read_json()
@@ -217,10 +297,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         change_user_password(int(user_id), new_password)
         self.send_json(200, {"ok": True})
 
-    def read_json(self):
+    def read_json(self, max_bytes=1024 * 1024):
         length = int(self.headers.get("Content-Length", "0"))
         if not length:
             return {}
+        if length > max_bytes:
+            raise ValueError("Запит завеликий.")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
     def session_token(self):

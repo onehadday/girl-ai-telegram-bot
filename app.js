@@ -36,6 +36,12 @@ const personForm = document.querySelector("#personForm");
 const personStatusText = document.querySelector("#personStatusText");
 const peopleList = document.querySelector("#peopleList");
 const favoritesList = document.querySelector("#favoritesList");
+const messageSpeaker = document.querySelector("#messageSpeaker");
+const screenshotInput = document.querySelector("#screenshotInput");
+const screenshotStatus = document.querySelector("#screenshotStatus");
+const clearConversationBtn = document.querySelector("#clearConversationBtn");
+const conversationHistory = document.querySelector("#conversationHistory");
+const conversationHistoryTitle = document.querySelector("#conversationHistoryTitle");
 const stylePrefs = {
   humor: document.querySelector("#styleHumor"),
   short: document.querySelector("#styleShort"),
@@ -126,6 +132,16 @@ function getSelectedPerson() {
   return getPeople().find((person) => person.id === id) || null;
 }
 
+function conversationKeyForPerson(person) {
+  if (!person) return "";
+  if (person.conversationKey) return person.conversationKey;
+  const normalized = String(person.name || "")
+    .trim()
+    .toLocaleLowerCase("uk-UA")
+    .replace(/\s+/g, "-");
+  return normalized ? `person:${normalized}` : `person:${person.id}`;
+}
+
 function personSummary(person) {
   if (!person) return "";
   const parts = [
@@ -141,6 +157,7 @@ function personSummary(person) {
 }
 
 function collectPayload(extraInstruction = "") {
+  const newMessage = fields.context.value.trim();
   const payload = Object.fromEntries(
     Object.entries(fields)
       .filter(([key]) => key !== "personProfile")
@@ -167,7 +184,15 @@ function collectPayload(extraInstruction = "") {
   additions.push("Режим грубуватого стилю має бути впевненим і живим, але без принижень, погроз, тиску та маніпуляцій.");
   if (extraInstruction) additions.push(extraInstruction);
 
-  payload.context = [payload.context, additions.join("\n")].filter(Boolean).join("\n\n");
+  if (selectedPerson) {
+    payload.context = additions.join("\n\n");
+    payload.newMessage = newMessage;
+    payload.conversationKey = conversationKeyForPerson(selectedPerson);
+    payload.personName = selectedPerson.name || "Співрозмовниця";
+    payload.speaker = messageSpeaker.value;
+  } else {
+    payload.context = [newMessage, additions.join("\n")].filter(Boolean).join("\n\n");
+  }
   payload.selectedProfile = profileText;
   payload.variantSeed = regenerateCounter;
   return payload;
@@ -664,6 +689,7 @@ function updateAuthUi(user) {
     renderPeople();
     renderProfileSelect();
     renderFavorites();
+    syncRemoteConversations();
   } else {
     authStatus.textContent = "Гостьовий режим";
     loginBtn.classList.remove("hidden");
@@ -719,6 +745,66 @@ function renderProfileSelect() {
     `<option value="${escapeHtml(person.id)}">${escapeHtml(person.name || "Без імені")} · ${escapeHtml(person.status || "профіль")}</option>`
   )).join("");
   if (people.some((person) => person.id === selected)) fields.personProfile.value = selected;
+}
+
+async function loadConversation() {
+  const person = getSelectedPerson();
+  clearConversationBtn.disabled = !person;
+  if (!person || !currentUser) {
+    conversationHistoryTitle.textContent = "Історія переписки";
+    conversationHistory.textContent = "Обери профіль співрозмовниці, щоб зберігати окрему історію.";
+    return;
+  }
+
+  conversationHistoryTitle.textContent = `Історія з ${person.name}`;
+  conversationHistory.textContent = "Завантажую...";
+  try {
+    const params = new URLSearchParams({ conversation_key: conversationKeyForPerson(person) });
+    const data = await apiJson(`/api/conversation?${params.toString()}`);
+    if (!data.items.length) {
+      conversationHistory.textContent = "Історія поки порожня. Наступне повідомлення збережеться тут.";
+      return;
+    }
+    conversationHistory.innerHTML = data.items.map((item) => `
+      <div class="conversation-line">
+        <strong>${escapeHtml(item.speaker || "Контекст")}</strong>
+        <span>${escapeHtml(item.content || "")}</span>
+      </div>
+    `).join("");
+  } catch (error) {
+    conversationHistory.textContent = error.message;
+  }
+}
+
+async function syncRemoteConversations() {
+  if (!currentUser) return;
+  try {
+    const data = await apiJson("/api/conversations");
+    const people = getPeople();
+    let changed = false;
+    for (const item of data.items || []) {
+      const exists = people.some(
+        (person) => conversationKeyForPerson(person) === item.conversation_key
+      );
+      if (!exists) {
+        people.push({
+          id: uid(),
+          conversationKey: item.conversation_key,
+          name: item.person_name || "Збережена переписка",
+          status: "історія з хмари",
+          style: "",
+          age: "",
+          likes: "",
+          dislikes: "",
+          facts: "",
+        });
+        changed = true;
+      }
+    }
+    if (changed) savePeople(people);
+  } catch {
+    // The chat remains usable even if cloud history is temporarily unavailable.
+  }
 }
 
 function renderPeople() {
@@ -806,6 +892,7 @@ async function runSuggestion(extraInstruction = "") {
     lastResponseText = data.text || "";
     addMessage("assistant", data.text, payload);
     modeBadge.textContent = data.mode || "готовий";
+    await loadConversation();
   } catch (error) {
     addMessage("assistant", `Не вийшло отримати відповідь.\n\nСпробуй ще раз через 20-30 секунд. На безкоштовному Render сервер іноді засинає.\n\nТехнічно: ${error.message}`);
     modeBadge.textContent = "помилка";
@@ -1011,6 +1098,7 @@ personForm.addEventListener("submit", (event) => {
     setFormStatus(personStatusText, "Додай хоча б ім'я.", "error");
     return;
   }
+  person.conversationKey = conversationKeyForPerson(person);
   savePeople([person, ...getPeople()]);
   fields.personProfile.value = person.id;
   personForm.reset();
@@ -1024,9 +1112,65 @@ peopleList.addEventListener("click", (event) => {
   if (button.classList.contains("use-person")) {
     fields.personProfile.value = id;
     showView("chat");
+    loadConversation();
   }
   if (button.classList.contains("delete-person")) {
     savePeople(getPeople().filter((person) => person.id !== id));
+  }
+});
+
+fields.personProfile.addEventListener("change", loadConversation);
+
+clearConversationBtn.addEventListener("click", async () => {
+  const person = getSelectedPerson();
+  if (!person || !currentUser) return;
+  if (!window.confirm(`Очистити всю збережену переписку з ${person.name}?`)) return;
+  try {
+    await apiJson("/api/conversation/clear", {
+      method: "POST",
+      body: JSON.stringify({ conversation_key: conversationKeyForPerson(person) }),
+    });
+    await loadConversation();
+  } catch (error) {
+    screenshotStatus.textContent = error.message;
+  }
+});
+
+screenshotInput.addEventListener("change", async () => {
+  const file = screenshotInput.files && screenshotInput.files[0];
+  if (!file) return;
+  if (!currentUser) {
+    screenshotStatus.textContent = "Спочатку увійди в акаунт.";
+    screenshotInput.value = "";
+    return;
+  }
+  if (file.size > 7 * 1024 * 1024) {
+    screenshotStatus.textContent = "Скріншот завеликий. Максимум 7 МБ.";
+    screenshotInput.value = "";
+    return;
+  }
+
+  screenshotStatus.textContent = "Читаю скріншот...";
+  screenshotInput.disabled = true;
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Не вдалося прочитати файл."));
+      reader.readAsDataURL(file);
+    });
+    const data = await apiJson("/api/analyze-screenshot", {
+      method: "POST",
+      body: JSON.stringify({ image, mime_type: file.type }),
+    });
+    fields.context.value = data.transcript || "";
+    messageSpeaker.value = "Переписка";
+    screenshotStatus.textContent = "Готово. Перевір розпізнаний текст і натисни «Підібрати відповідь».";
+  } catch (error) {
+    screenshotStatus.textContent = error.message;
+  } finally {
+    screenshotInput.disabled = false;
+    screenshotInput.value = "";
   }
 });
 

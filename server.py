@@ -1,17 +1,22 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+import base64
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
 from storage import (
+    add_conversation_message,
     authenticate_user,
     change_user_password,
+    clear_conversation_messages,
     create_session,
     create_user,
     delete_session,
     get_user_by_session,
     init_db,
+    list_conversations,
+    list_conversation_messages,
     list_people,
     list_interactions,
     log_interaction,
@@ -428,6 +433,104 @@ def call_gemini(data, model=None):
     return {"text": text or "Не вдалося прочитати відповідь Gemini.", "mode": f"Gemini: {model}"}
 
 
+def analyze_screenshot(image_base64, mime_type="image/jpeg"):
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Для розпізнавання скріншотів потрібен GEMINI_API_KEY.")
+    if mime_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise ValueError("Підтримуються JPG, PNG і WEBP.")
+
+    try:
+        raw = base64.b64decode(image_base64, validate=True)
+    except Exception as error:
+        raise ValueError("Не вдалося прочитати файл зображення.") from error
+    if len(raw) > 7 * 1024 * 1024:
+        raise ValueError("Скріншот завеликий. Максимум 7 МБ.")
+
+    prompt = """
+Розпізнай переписку на скріншоті месенджера.
+Визнач автора за розташуванням бульбашок: повідомлення власника акаунта зазвичай праворуч,
+повідомлення співрозмовниці зазвичай ліворуч. Врахуй підписи, кольори та цитати.
+Поверни тільки повідомлення у хронологічному порядку, по одному на рядок:
+Я: текст
+Вона: текст
+Не додавай порад, аналізу, Markdown або вигаданих слів.
+Якщо сторону неможливо визначити, напиши Невідомо: текст.
+""".strip()
+    models = [
+        os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite").strip(),
+        "gemini-2.0-flash",
+        "gemini-2.5-flash-lite",
+    ]
+    errors = []
+    for model in dict.fromkeys(item for item in models if item):
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": image_base64,
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1600},
+        }
+        try:
+            result = post_json(
+                GEMINI_URL_TEMPLATE.format(model=model, api_key=api_key),
+                payload,
+                {"Content-Type": "application/json"},
+            )
+            chunks = [
+                part.get("text", "")
+                for candidate in result.get("candidates", [])
+                for part in candidate.get("content", {}).get("parts", [])
+            ]
+            transcript = "\n".join(chunks).strip()
+            if transcript:
+                return {"transcript": transcript, "mode": f"Gemini Vision: {model}"}
+        except Exception as error:
+            errors.append(str(error))
+    raise RuntimeError(short_error(errors[-1] if errors else "empty response"))
+
+
+def conversation_owner_for_user(user):
+    return f"site:{user['id']}"
+
+
+def add_history_to_prompt(data, user):
+    conversation_key = str(data.get("conversationKey", "")).strip()
+    new_message = str(data.get("newMessage", "")).strip()
+    if not conversation_key or not new_message:
+        return data
+
+    owner_key = conversation_owner_for_user(user)
+    add_conversation_message(
+        owner_key,
+        conversation_key,
+        data.get("personName", ""),
+        data.get("speaker", "Вона"),
+        new_message,
+        "site",
+    )
+    history = list_conversation_messages(owner_key, conversation_key, limit=40)
+    transcript = "\n".join(f"{item['speaker']}: {item['content']}" for item in history)
+    enriched = dict(data)
+    notes = str(data.get("context", "")).strip()
+    enriched["context"] = (
+        f"Збережена історія переписки з {data.get('personName') or 'цією людиною'}:\n"
+        f"{transcript}\n\n"
+        f"Додатковий контекст:\n{notes or 'немає'}\n\n"
+        "Запропонуй відповідь саме на останнє повідомлення з цієї історії."
+    )
+    return enriched
+
+
 def post_json(url, payload, headers):
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -550,6 +653,12 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/admin/users":
             self.handle_users()
             return
+        if path == "/api/conversation":
+            self.handle_conversation()
+            return
+        if path == "/api/conversations":
+            self.handle_conversations()
+            return
         super().do_GET()
 
     def serve_index(self):
@@ -580,21 +689,29 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/admin/reset-password":
             self.handle_reset_password()
             return
-        if self.path != "/api/suggest":
-            self.send_error(404)
+        if self.path == "/api/analyze-screenshot":
+            self.handle_screenshot()
             return
+        if self.path == "/api/conversation/clear":
+            self.handle_clear_conversation()
+            return
+        if self.path == "/api/suggest":
+            self.handle_suggest()
+            return
+        self.send_error(404)
 
-        length = int(self.headers.get("Content-Length", "0"))
+    def handle_suggest(self):
         try:
             user = self.current_user()
             if not user:
                 self.send_json(401, {"error": "Спочатку зареєструйся або увійди в акаунт."})
                 return
-            data = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = suggest(data)
+            data = self.read_json()
+            enriched_data = add_history_to_prompt(data, user)
+            result = suggest(enriched_data)
             log_interaction(
                 "site",
-                data.get("context", ""),
+                enriched_data.get("context", ""),
                 result.get("text", ""),
                 result.get("mode", ""),
                 user=user,
@@ -603,6 +720,64 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(200, result)
         except Exception as error:
             self.send_json(500, {"error": str(error)})
+
+    def handle_screenshot(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        try:
+            data = self.read_json(max_bytes=10 * 1024 * 1024)
+            image = str(data.get("image", ""))
+            if "," in image and image.startswith("data:"):
+                image = image.split(",", 1)[1]
+            self.send_json(
+                200,
+                analyze_screenshot(image, data.get("mime_type", "image/jpeg")),
+            )
+        except (ValueError, RuntimeError) as error:
+            self.send_json(400, {"error": str(error)})
+        except Exception:
+            self.send_json(500, {"error": "Не вдалося розпізнати скріншот. Спробуй інше зображення."})
+
+    def handle_conversation(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        conversation_key = query.get("conversation_key", [""])[0].strip()
+        if not conversation_key:
+            self.send_json(400, {"error": "Обери профіль співрозмовниці."})
+            return
+        items = list_conversation_messages(
+            conversation_owner_for_user(user),
+            conversation_key,
+            limit=60,
+        )
+        self.send_json(200, {"items": items})
+
+    def handle_conversations(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        self.send_json(
+            200,
+            {"items": list_conversations(conversation_owner_for_user(user))},
+        )
+
+    def handle_clear_conversation(self):
+        user = self.current_user()
+        if not user:
+            self.send_json(401, {"error": "Спочатку увійди в акаунт."})
+            return
+        conversation_key = str(self.read_json().get("conversation_key", "")).strip()
+        if not conversation_key:
+            self.send_json(400, {"error": "Обери профіль співрозмовниці."})
+            return
+        clear_conversation_messages(conversation_owner_for_user(user), conversation_key)
+        self.send_json(200, {"ok": True})
 
     def handle_register(self):
         data = self.read_json()
@@ -696,10 +871,12 @@ class Handler(SimpleHTTPRequestHandler):
         change_user_password(int(user_id), new_password)
         self.send_json(200, {"ok": True})
 
-    def read_json(self):
+    def read_json(self, max_bytes=1024 * 1024):
         length = int(self.headers.get("Content-Length", "0"))
         if not length:
             return {}
+        if length > max_bytes:
+            raise ValueError("Запит завеликий.")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
     def session_token(self):

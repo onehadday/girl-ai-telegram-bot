@@ -93,6 +93,26 @@ def init_db():
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id SERIAL PRIMARY KEY,
+                    owner_key TEXT NOT NULL,
+                    conversation_key TEXT NOT NULL,
+                    person_name TEXT,
+                    speaker TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS conversation_messages_lookup
+                ON conversation_messages (owner_key, conversation_key, id)
+                """
+            )
         else:
             connection.execute(
                 """
@@ -130,6 +150,26 @@ def init_db():
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(user_id) REFERENCES users(id)
                 )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_key TEXT NOT NULL,
+                    conversation_key TEXT NOT NULL,
+                    person_name TEXT,
+                    speaker TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS conversation_messages_lookup
+                ON conversation_messages (owner_key, conversation_key, id)
                 """
             )
 
@@ -365,3 +405,75 @@ def list_interactions(limit=80, user_id=None, source=None, external_id=None):
         ).fetchall()
         return [dict(row) for row in rows]
 
+
+def add_conversation_message(owner_key, conversation_key, person_name, speaker, content, source):
+    clean_content = str(content or "").strip()
+    if not clean_content:
+        return
+    init_db()
+    with db() as connection:
+        connection.execute(
+            f"""
+            INSERT INTO conversation_messages
+                (owner_key, conversation_key, person_name, speaker, content, source, created_at)
+            VALUES
+                ({placeholder(1)}, {placeholder(2)}, {placeholder(3)}, {placeholder(4)},
+                 {placeholder(5)}, {placeholder(6)}, {placeholder(7)})
+            """,
+            (
+                str(owner_key),
+                str(conversation_key),
+                str(person_name or ""),
+                str(speaker or "контекст"),
+                clean_content,
+                str(source or "site"),
+                now_iso(),
+            ),
+        )
+
+
+def list_conversation_messages(owner_key, conversation_key, limit=40):
+    init_db()
+    with db() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT id, person_name, speaker, content, source, created_at
+            FROM conversation_messages
+            WHERE owner_key = {placeholder(1)} AND conversation_key = {placeholder(2)}
+            ORDER BY id DESC
+            {limit_clause()}
+            """,
+            (str(owner_key), str(conversation_key), int(limit)),
+        ).fetchall()
+    return [dict(row) for row in reversed(rows)]
+
+
+def list_conversations(owner_key):
+    init_db()
+    with db() as connection:
+        rows = connection.execute(
+            f"""
+            SELECT conversation_key,
+                   MAX(person_name) AS person_name,
+                   COUNT(*) AS messages_count,
+                   MAX(created_at) AS last_seen
+            FROM conversation_messages
+            WHERE owner_key = {placeholder(1)}
+            GROUP BY conversation_key
+            ORDER BY last_seen DESC
+            """,
+            (str(owner_key),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def clear_conversation_messages(owner_key, conversation_key):
+    init_db()
+    with db() as connection:
+        connection.execute(
+            f"""
+            DELETE FROM conversation_messages
+            WHERE owner_key = {placeholder(1)} AND conversation_key = {placeholder(2)}
+            """,
+            (str(owner_key), str(conversation_key)),
+        )

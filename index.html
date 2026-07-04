@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Girl AI - помічник для переписки</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=conversation-memory-20260704" />
   </head>
   <body>
     <div class="shell">
@@ -91,8 +91,26 @@
               </div>
 
               <div class="composer">
-                <textarea id="context" placeholder="Наприклад: вона відповіла 'дякую', хочу відповісти не сухо і не нав'язливо"></textarea>
+                <div class="conversation-tools">
+                  <select id="messageSpeaker" aria-label="Хто написав повідомлення">
+                    <option value="Вона">Вона написала</option>
+                    <option value="Я">Я написав</option>
+                    <option value="Контекст">Опис ситуації</option>
+                    <option value="Переписка">Кілька повідомлень</option>
+                  </select>
+                  <label class="upload-button" for="screenshotInput">
+                    Додати скріншот
+                    <input id="screenshotInput" type="file" accept="image/png,image/jpeg,image/webp" />
+                  </label>
+                  <button id="clearConversationBtn" class="secondary" type="button">Очистити історію</button>
+                </div>
+                <textarea id="context" placeholder="Встав останнє повідомлення або додай скріншот переписки"></textarea>
+                <p id="screenshotStatus" class="composer-status"></p>
                 <button id="generateBtn">Підібрати відповідь</button>
+                <details class="conversation-history">
+                  <summary id="conversationHistoryTitle">Історія переписки</summary>
+                  <div id="conversationHistory">Обери профіль співрозмовниці, щоб зберігати окрему історію.</div>
+                </details>
               </div>
             </section>
 
@@ -349,6 +367,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=stability-audit-20260626"></script>
+    <script src="app.js?v=conversation-memory-20260704"></script>
   </body>
 </html>
