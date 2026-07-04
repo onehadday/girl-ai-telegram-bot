@@ -1,7 +1,9 @@
 import base64
 import hashlib
+import html
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -37,16 +39,22 @@ def telegram_request(token, method, payload=None):
         return json.loads(response.read().decode("utf-8"))
 
 
-def send_message(token, chat_id, text):
-    for chunk in split_message(text):
+def send_message(token, chat_id, text, parse_mode=None, reply_markup=None):
+    chunks = split_message(text)
+    for index, chunk in enumerate(chunks):
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "disable_web_page_preview": True,
+        }
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+        if reply_markup and index == len(chunks) - 1:
+            payload["reply_markup"] = reply_markup
         telegram_request(
             token,
             "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-            },
+            payload,
         )
 
 
@@ -64,6 +72,85 @@ def split_message(text):
     if current:
         chunks.append(current)
     return chunks
+
+
+def clean_variant_text(text):
+    cleaned = re.sub(r"[*_`#]", "", str(text or ""))
+    cleaned = cleaned.replace("«", "").replace("»", "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().strip('"')
+    if len(cleaned) <= 256:
+        return cleaned
+    shortened = cleaned[:253]
+    for separator in (". ", "! ", "? ", ", "):
+        split_at = shortened.rfind(separator)
+        if split_at >= 120:
+            return shortened[: split_at + 1].strip()
+    return shortened.rstrip() + "..."
+
+
+def parse_suggestion_variants(text):
+    labels = r"Найкращий варіант|М['’]якше|Сміливіше|З гумором"
+    stop_labels = labels + r"|Чому це працює|Що не варто писати|AI-аналіз|Ще варіанти"
+    pattern = re.compile(
+        rf"(?ims)^\s*({labels})\s*:\s*(.*?)"
+        rf"(?=^\s*(?:{stop_labels})\s*:|\Z)"
+    )
+    title_map = {
+        "найкращий варіант": ("🏆", "Найкращий"),
+        "м'якше": ("🙂", "М'якше"),
+        "м’якше": ("🙂", "М'якше"),
+        "сміливіше": ("🔥", "Сміливіше"),
+        "з гумором": ("😄", "З гумором"),
+    }
+    variants = []
+    for match in pattern.finditer(str(text or "")):
+        normalized = match.group(1).strip().lower()
+        icon, title = title_map.get(normalized, ("💬", match.group(1).strip()))
+        answer = clean_variant_text(match.group(2))
+        if answer and all(item["answer"].lower() != answer.lower() for item in variants):
+            variants.append({"icon": icon, "title": title, "answer": answer})
+    return variants[:4]
+
+
+def send_suggestion_result(token, chat_id, text):
+    variants = parse_suggestion_variants(text)
+    if not variants:
+        fallback = clean_variant_text(text)
+        send_message(
+            token,
+            chat_id,
+            fallback,
+            reply_markup={
+                "inline_keyboard": [
+                    [{"text": "📋 Копіювати", "copy_text": {"text": fallback}}]
+                ]
+            },
+        )
+        return
+
+    send_message(
+        token,
+        chat_id,
+        "<b>Готово. Обери варіант відповіді:</b>",
+        parse_mode="HTML",
+    )
+    for index, variant in enumerate(variants, start=1):
+        answer = variant["answer"]
+        formatted = (
+            f"<b>{index}. {variant['icon']} {html.escape(variant['title'])}</b>\n\n"
+            f"{html.escape(answer)}"
+        )
+        send_message(
+            token,
+            chat_id,
+            formatted,
+            parse_mode="HTML",
+            reply_markup={
+                "inline_keyboard": [
+                    [{"text": "📋 Копіювати", "copy_text": {"text": answer}}]
+                ]
+            },
+        )
 
 
 def is_allowed(message):
@@ -297,7 +384,11 @@ def handle_message(token, message):
         display_name=display_name,
         external_id=user_id,
     )
-    send_message(token, chat_id, result.get("text", "Не вдалося підготувати відповідь."))
+    send_suggestion_result(
+        token,
+        chat_id,
+        result.get("text", "Не вдалося підготувати відповідь."),
+    )
 
 
 def run_bot():
