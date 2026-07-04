@@ -2,6 +2,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 import base64
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,6 +28,19 @@ PORT = int(os.getenv("PORT", "8000"))
 OPENAI_URL = "https://api.openai.com/v1/responses"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 GEMINI_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+
+def gemini_model_candidates():
+    configured = os.getenv("GEMINI_MODEL", "").strip()
+    models = [
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-2.5-flash-lite",
+    ]
+    if configured and not configured.startswith("gemini-2.0"):
+        models.insert(1, configured)
+    return list(dict.fromkeys(models))
 
 
 def text_blob(data):
@@ -403,13 +417,11 @@ def call_openrouter(data):
 
 def call_gemini(data, model=None):
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+    model = model or "gemini-3.5-flash"
     generation_config = {
         "temperature": 0.8,
         "maxOutputTokens": 2048,
     }
-    if model.startswith("gemini-2.5") or model.startswith("gemini-3"):
-        generation_config["thinkingConfig"] = {"thinkingBudget": 0}
 
     payload = {
         "contents": [
@@ -457,46 +469,45 @@ def analyze_screenshot(image_base64, mime_type="image/jpeg"):
 Не додавай порад, аналізу, Markdown або вигаданих слів.
 Якщо сторону неможливо визначити, напиши Невідомо: текст.
 """.strip()
-    models = [
-        os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite").strip(),
-        "gemini-2.0-flash",
-        "gemini-2.5-flash-lite",
-    ]
     errors = []
-    for model in dict.fromkeys(item for item in models if item):
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt},
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": image_base64,
-                            }
-                        },
-                    ]
-                }
-            ],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1600},
-        }
-        try:
-            result = post_json(
-                GEMINI_URL_TEMPLATE.format(model=model, api_key=api_key),
-                payload,
-                {"Content-Type": "application/json"},
-            )
-            chunks = [
-                part.get("text", "")
-                for candidate in result.get("candidates", [])
-                for part in candidate.get("content", {}).get("parts", [])
-            ]
-            transcript = "\n".join(chunks).strip()
-            if transcript:
-                return {"transcript": transcript, "mode": f"Gemini Vision: {model}"}
-        except Exception as error:
-            errors.append(str(error))
-    raise RuntimeError(short_error(errors[-1] if errors else "empty response"))
+    for attempt in range(2):
+        if attempt:
+            time.sleep(2)
+        for model in gemini_model_candidates():
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": image_base64,
+                                }
+                            },
+                        ]
+                    }
+                ],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1600},
+            }
+            try:
+                result = post_json(
+                    GEMINI_URL_TEMPLATE.format(model=model, api_key=api_key),
+                    payload,
+                    {"Content-Type": "application/json"},
+                )
+                chunks = [
+                    part.get("text", "")
+                    for candidate in result.get("candidates", [])
+                    for part in candidate.get("content", {}).get("parts", [])
+                ]
+                transcript = "\n".join(chunks).strip()
+                if transcript:
+                    return {"transcript": transcript, "mode": f"Gemini Vision: {model}"}
+            except Exception as error:
+                errors.append(str(error))
+    reason = short_error(errors[-1] if errors else "empty response")
+    raise RuntimeError(f"{reason} Спробуй ще раз через хвилину.")
 
 
 def conversation_owner_for_user(user):
@@ -552,16 +563,9 @@ def post_json(url, payload, headers):
 
 def suggest(data):
     if os.getenv("GEMINI_API_KEY", "").strip():
-        models = [
-            os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite").strip(),
-            "gemini-2.0-flash-lite",
-            "gemini-2.0-flash",
-            "gemini-flash-lite-latest",
-            "gemini-2.5-flash-lite",
-        ]
         seen = set()
         errors = []
-        for model in models:
+        for model in gemini_model_candidates():
             if not model or model in seen:
                 continue
             seen.add(model)

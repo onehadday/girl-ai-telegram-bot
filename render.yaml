@@ -15,7 +15,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.0-flash-lite
+        value: gemini-3.5-flash
       - key: PUBLIC_URL
         sync: false
       - key: ADMIN_EMAIL

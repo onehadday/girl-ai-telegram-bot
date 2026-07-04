@@ -7,7 +7,7 @@
 1. Скопіюй `.env.example` у `.env`.
 2. Для безкоштовного старту додай `GEMINI_API_KEY`.
    - Ключ можна створити в Google AI Studio.
-   - Модель за замовчуванням: `gemini-2.0-flash-lite`.
+   - Модель за замовчуванням: `gemini-3.5-flash`.
 3. Альтернатива: додай `OPENROUTER_API_KEY`, тоді застосунок використає `openrouter/free`.
 4. Запусти:
 
@@ -98,7 +98,7 @@ TELEGRAM_BOT_TOKEN=токен_від_BotFather
 TELEGRAM_ALLOWED_USER_ID=824778488
 TELEGRAM_WEBHOOK_SECRET=довгий_секретний_рядок
 GEMINI_API_KEY=твій_gemini_ключ
-GEMINI_MODEL=gemini-2.0-flash-lite
+GEMINI_MODEL=gemini-3.5-flash
 PUBLIC_URL=https://твій-сервіс.onrender.com
 ```
 
